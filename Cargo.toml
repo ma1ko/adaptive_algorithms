@@ -8,5 +8,24 @@ edition = "2018"
 
 [dependencies]
 rayon = {git = "https://github.com/ma1ko/rayon"}
-mergesort = {git = "https://github.com/ma1ko/mergesort"}
+# mergesort = {git = "https://github.com/ma1ko/mergesort"}
 rand = "*"
+criterion = {git = "https://github.com/ma1ko/criterion.rs"}
+num_cpus = "*"
+rayon_logs = { git = "https://github.com/ma1ko/rayon-logs", optional = true}
+lazy_static = "*"
+crossbeam-utils = "*"
+
+
+[features]
+logs = ["rayon_logs"]
+
+[profile.bench]
+debug = true
+
+[profile.release]
+debug = true
+
+[[bench]]
+name = "bench"
+harness = false
