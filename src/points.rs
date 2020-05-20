@@ -61,13 +61,11 @@ impl<'a> Benchable<'a, f64> for Searcher<'a> {
         // self.min = 100.0;
         // self.start_index = 0;
         // self.end_index
-
     }
 }
 
 impl<'a> Task for Searcher<'a> {
     fn step(&mut self) {
-        for i in 0..10.min(self.end_index - self.start_index) {
         let mut t = Tester {
             points: self.points,
             start_index: self.start_index + 1,
@@ -75,10 +73,10 @@ impl<'a> Task for Searcher<'a> {
             min: self.min,
             point: &self.points[self.start_index],
         };
+
         t.run(Some(self));
         self.min = self.min.min(t.min);
         self.start_index = (self.start_index + 1).min(self.end_index);
-        }
     }
     fn can_split(&self) -> bool {
         return self.end_index - self.start_index > 16;
@@ -183,6 +181,5 @@ impl<'a> Benchable<'a, f64> for RayonPoints<'a> {
     }
     fn reset(&mut self) {
         self.min = 100.0;
-
     }
 }

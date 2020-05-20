@@ -46,7 +46,7 @@ pub fn get_my_steal_count() -> usize {
     if let Some(thread_index) = rayon::current_thread_index() {
         let steal_counter = V[thread_index].load(Ordering::Relaxed);
         let steal_counter = steal_counter.count_ones() as usize;
-        let steal_counter = std::cmp::min(steal_counter, num_cpus::get() - 1);
+        let steal_counter = std::cmp::min(steal_counter, *NUM_THREADS - 1);
         steal_counter
     } else {
         0
