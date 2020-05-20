@@ -1,7 +1,6 @@
 use adaptive_algorithms::adaptive_bench::Benchable;
 use criterion::BenchmarkGroup;
 use criterion::*;
-use rayon::prelude::*;
 extern crate rand;
 
 type Group<'a> = BenchmarkGroup<'a, criterion::measurement::WallTime>;
@@ -32,7 +31,7 @@ where R: std::fmt::Debug
         for test in &mut self.tests {
             let group = &mut self.group;
             // let checksum = self.checksum;
-            group.bench_with_input(test.name(), &(), |b, _| {
+            group.bench_with_input(BenchmarkId::new(test.name(), test.num_cpus), &(), |b, _| {
                 let pool = test.get_thread_pool();
                 b.iter_batched(
                     || (),
@@ -72,11 +71,8 @@ impl<'a, R> TestConfig<'a, R> {
         };
         self.test.name().to_string()
             + "/"
-            + &self.len.to_string()
-            + "/"
-            + &self.num_cpus.to_string()
-            + "/"
             + &backoff
+            + &self.len.to_string()
     }
 }
 
@@ -86,6 +82,7 @@ fn bench(c: &mut Criterion) {
     let data = Point::create_random_points(5000);
     let mut group = c.benchmark_group("NearestNeighbor");
     group.warm_up_time(std::time::Duration::new(1, 0));
+    group.measurement_time(std::time::Duration::new(3,0));
     group.sample_size(10);
     group.nresamples(10);
 
