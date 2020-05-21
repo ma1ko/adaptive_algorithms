@@ -2,58 +2,33 @@ extern crate rand;
 use std::time::Instant;
 
 // use rayon::prelude::*;
-pub mod points;
 pub mod adaptive_bench;
+pub mod points;
+pub mod rayon;
+pub mod scheduling;
 pub mod steal;
 pub mod task;
-pub mod rayon;
-use points::Searcher;
 #[macro_use]
 extern crate lazy_static;
 
-
+use crate::adaptive_bench::Benchable;
+use crate::scheduling::*;
+use crate::task::Task;
 pub fn main() {
-    // println!("Running");
+    // let remaining_times = vec![
+    //     1, 2, 5, 20, 09, 20, 42, 13, 4, 20, 64, 6, 84, 20, 01, 91, 100, 5, 42, 25, 65, 39, 62, 35, 60, 25, 29, 53
+    // ];
 
-    // let points = points::Point::create_random_points(50000);
-    // let now = Instant::now();
+    // let mut x = Scheduling {
+    //     remaining_times: remaining_times.clone(),
+    //     best: std::u64::MAX,
+    //     procs: vec![0, 0],
+    // };
+    // x.start();
+    // println!("{}", x.best);
 
-    // let pool = rayon::ThreadPoolBuilder::new()
-    //     .num_threads(4)
-    //     .build()
-    //     .unwrap();
-    // let min = pool.install(|| {
-    //     let iter = points
-    //         .par_iter()
-    //         .enumerate()
-    //         .map(|(i, a)| {
-    //             let inner_iter = points[i + 1..].iter().map(|b| a.distance_to(b));
-    //             inner_iter.fold(1.0f64, |x, y| x.min(y))
-    //         })
-    //         .collect::<Vec<f64>>();
-    //     let min = iter.iter().fold(1.0f64, |x, y| x.min(*y));
-    //     min
-    // });
-    // let new_now = Instant::now();
-    // println!("{:?}", new_now.duration_since(now));
-    // println!("Closest points have a distance of {}", min);
+    // let mut b = BruteForce::new(remaining_times.clone());
 
-    // println!("My Algo");
-
-    // let pool = rayon::ThreadPoolBuilder::new()
-    //     .num_threads(4)
-    //     .steal_callback(|x| mergesort::steal::steal(6, x))
-    //     .build()
-    //     .unwrap();
-    // let mut s = Searcher::new(&points);
-    // pool.install(|| s.run_());
-    // let now = Instant::now();
-    // assert_eq!(min, s.min);
-    // println!("{:?}", now.duration_since(new_now));
-    // println!("My result: {}", s.min);
+    // b.start();
+    // println!("{}", b.get_result());
 }
-
-
-
-
-

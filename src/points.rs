@@ -114,7 +114,7 @@ impl<'a> Task for Tester<'a> {
     fn step(&mut self) {
         let mut min = self.min;
         let point = self.point;
-        let end_index = self.end_index; // (self.start_index + 5000).min(self.end_index);
+        let end_index =(self.start_index + 128).min(self.end_index);
         let others = &self.points[self.start_index..end_index];
         for other in others {
             min = min.min(point.distance_to(other));

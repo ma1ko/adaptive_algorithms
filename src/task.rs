@@ -77,7 +77,12 @@ pub trait Task: Send + Sync + Sized {
             self.fuse(other);
         }
     }
-    // fn check(&mut self, f: Option<impl Task>) -> bool {}
+    fn check(&mut self, mut f: Option<&mut impl Task>){
+        let steal_counter = steal::get_my_steal_count();
+        if steal_counter != 0 && self.can_split() {
+            self.split_run(steal_counter, f.take());
+        }
+    }
     fn can_split(&self) -> bool;
     fn is_finished(&self) -> bool;
     fn split(&mut self) -> Self;
