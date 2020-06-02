@@ -38,6 +38,16 @@ pub trait Task: Send + Sync + Sized {
             self.step();
         }
     }
+    fn run_recursive(&mut self) {
+        let steal_counter = steal::get_my_steal_count();
+        if steal_counter != 0 && self.can_split() {
+            let mut other = self.split();
+            self.split_run(steal_counter, Some(&mut other));
+            self.fuse(other);
+        }
+        // self.run_(other);
+        self.run_();
+    }
     fn step(&mut self);
     fn split_run(&mut self, steal_counter: usize, mut f: Option<&mut impl Task>) {
         // run the parent task
@@ -77,7 +87,7 @@ pub trait Task: Send + Sync + Sized {
             self.fuse(other);
         }
     }
-    fn check(&mut self, mut f: Option<&mut impl Task>){
+    fn check(&mut self, mut f: Option<&mut impl Task>) {
         let steal_counter = steal::get_my_steal_count();
         if steal_counter != 0 && self.can_split() {
             self.split_run(steal_counter, f.take());

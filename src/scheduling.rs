@@ -8,43 +8,69 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const P: usize = 2; // the number of processors we simulate
 
 use crate::task::Task;
-use crate::task::NOTHING;
+// use crate::task::NOTHING;
 
 pub struct Scheduling {
     pub remaining_times: Vec<u64>,
+    pub index: usize,
     pub best: u64,
     pub procs: Vec<u64>,
-    pub splits: Vec<u64>,
+    pub decisions: Vec<usize>,
 }
-impl Scheduling {
-    pub fn new(remaining_times: Vec<u64>, procs: Vec<u64>) -> Self {
+impl<'a> Scheduling {
+    pub fn new(remaining_times: Vec<u64>, mut procs: Vec<u64>) -> Self {
+        // procs[0] += remaining_times[0];
         Scheduling {
             remaining_times,
+            index: 0,
             best: std::u64::MAX,
             procs,
-            splits: Vec::new(),
+            decisions: vec![],
         }
     }
 }
-impl Task for Scheduling {
-    fn step(&mut self) {
-        if self.remaining_times.len() == 10 {
-            self.check(NOTHING);
+impl<'a> Task for Scheduling {
+    fn run_(&mut self) {
+        // println!("Depth: {}, decisions: {:?}", self.index, self.decisions);
+        // Sequential cut-off
+        if self.remaining_times.len() - self.index <= 10 {
+            self.best = self
+                .best
+                .min(brute_force_rec(&mut self.procs, &mut self.remaining_times[self.index..]));
+            return;
         }
-        if let Some(time) = self.remaining_times.pop() {
-            (0..P)
-                .into_iter()
-                .map(|i| {
-                    self.procs[i] += time;
-                    self.step();
-                    self.procs[i] -= time;
-                })
-                .min()
-                .unwrap();
-            self.remaining_times.push(time);
-        } else {
+        // this is always true with the cut-off
+        if let Some(&new_decision) = self.remaining_times.get(self.index) {
+            // start with branch 0
+            self.decisions.push(0);
+            self.procs[0] += new_decision;
+            self.index += 1;
+            self.run_();
+
+
+            // try a different branch
+            if let Some(decision) = self.decisions.pop() {
+                if decision < P - 1 {
+                    self.procs[decision] -= new_decision;
+                    let decision = decision + 1;
+                    self.procs[decision] += new_decision;
+                    self.decisions.push(decision);
+                    self.run_();
+                    self.decisions.pop();
+                }
+            }
+            self.index -= 1;
+            self.procs[P - 1] -= new_decision;
+        }
+        else {
             self.best = self.best.min(*self.procs.iter().max().unwrap());
+            // println!("Best: {}", self.best);
+
         }
+
+    }
+    fn step(&mut self) {
+        unimplemented!()
     }
     fn can_split(&self) -> bool {
         true
@@ -52,26 +78,42 @@ impl Task for Scheduling {
     fn split(&mut self) -> Self {
         assert_eq!(self.procs.len(), 2);
         let time = self.remaining_times.pop().unwrap();
+
         let mut other = Scheduling {
             remaining_times: self.remaining_times.clone(),
+            index: self.index,
             best: self.best,
             procs: self.procs.clone(),
-            splits: Vec::new(),
+            decisions: Vec::new(),
         };
         self.procs[0] += time;
         other.procs[1] += time;
-        self.splits.push(time);
         return other;
     }
     fn fuse(&mut self, other: Self) {
-        let time = self.splits.pop().unwrap();
-        self.procs[0] -= time;
-        self.remaining_times.push(time);
+        // let time = self.splits.pop().unwrap();
+        // self.procs[0] -= time;
+        // self.remaining_times.push(time);
+        unsafe { self.remaining_times.set_len(self.remaining_times.len() + 1) }
         self.best = other.best.min(self.best);
     }
     fn is_finished(&self) -> bool {
-        self.best != std::u64::MAX
+        unimplemented!()
+        // *self.best != std::u64::MAX
     }
+}
+
+#[test]
+fn test_scheduling() {
+    let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
+        .take(15)
+        .collect();
+    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
+    let mut s = Scheduling::new(times.clone(), procs);
+    s.start();
+    let mut b = BruteForcePar::new(times.clone());
+    b.start();
+    assert_eq!(s.get_result(), b.get_result());
 }
 
 use crate::adaptive_bench::Benchable;
@@ -87,6 +129,10 @@ impl<'a> Benchable<'a, u64> for Scheduling {
     }
     fn reset(&mut self) {
         self.best = std::u64::MAX;
+    }
+    fn verify(&self, result: &u64) -> bool {
+        assert_eq!(*result, self.best);
+        true
     }
 }
 
@@ -141,8 +187,12 @@ impl<'a> Benchable<'a, u64> for BruteForcePar {
     fn reset(&mut self) {
         self.result = std::u64::MAX;
     }
+    fn verify(&self, result: &u64) -> bool {
+        *result == self.result
+    }
 }
 
+/*
 fn greedy_scheduling(times: &[u64]) -> u64 {
     let procs: Vec<u64> = std::iter::repeat(0).take(P).collect(); // processors state (load)
     let procs = times.iter().fold(procs, |mut procs, time| {
@@ -152,6 +202,7 @@ fn greedy_scheduling(times: &[u64]) -> u64 {
     });
     procs.iter().max().cloned().unwrap()
 }
+*/
 
 fn brute_force_rec(procs: &mut Vec<u64>, times: &[u64]) -> u64 {
     times
@@ -259,7 +310,7 @@ fn branch_and_bound_rec_par(procs: &mut Vec<u64>, times: &[u64], best_solution: 
                 )
             })
             .unwrap_or_else(|| {
-                let value = procs.iter().max().cloned().unwrap();
+                // let value = procs.iter().max().cloned().unwrap();
                 // best_solution.fetch_min(value, Ordering::SeqCst);
             });
     }
@@ -277,7 +328,7 @@ fn branch_and_bound_rec_fallback(procs: &mut Vec<u64>, times: &[u64], best_solut
                 }
             })
             .unwrap_or_else(|| {
-                let value = procs.iter().max().cloned().unwrap();
+                // let value = procs.iter().max().cloned().unwrap();
                 // best_solution.fetch_min(value, Ordering::SeqCst);
             });
     }

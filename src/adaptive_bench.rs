@@ -2,13 +2,13 @@ use rayon;
 
 pub use crate::steal;
 
-pub trait Benchable<'a, R>  : Send + Sync{
+pub trait Benchable<'a, R>: Send + Sync {
     fn start(&mut self) -> ();
     fn name(&self) -> &'static str;
     // fn id(&self) -> BenchmarkId;
-    fn verify(&self, _result: &R) -> bool { return true }
+    fn verify(&self, _result: &R) -> bool { true} 
     fn get_result(&self) -> R;
-    fn get_thread_pool(&self, num_threads: usize, backoffs: Option<usize>) -> rayon::ThreadPool{
+    fn get_thread_pool(&self, num_threads: usize, backoffs: Option<usize>) -> rayon::ThreadPool {
         let mut pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads);
         if let Some(backoffs) = backoffs {
             pool = pool.steal_callback(move |x| steal::steal(backoffs, x));
@@ -22,24 +22,25 @@ use criterion::BenchmarkGroup;
 use criterion::*;
 type Group<'a> = BenchmarkGroup<'a, criterion::measurement::WallTime>;
 pub struct Tester<'a, R>
-where R: std::fmt::Debug
+where
+    R: std::fmt::Debug,
 {
     // data : T,
-    result: R,
+    result: Option<R>,
     tests: Vec<TestConfig<'a, R>>,
     group: Group<'a>,
 }
 impl<'a, R> Tester<'a, R>
-where R: std::fmt::Debug
+where
+    R: std::fmt::Debug,
 {
     pub fn verify(result: &R, test: Box<dyn Benchable<R> + 'a>) {
         assert!(test.verify(result))
     }
-    pub fn new(mut tests: Vec<TestConfig<'a, R>>, group: Group<'a>) -> Self {
-        // tests[0].test.start();
+    pub fn new(tests: Vec<TestConfig<'a, R>>, group: Group<'a>, result: Option<R>) -> Self {
+        
         Tester {
-            // data ,
-            result: tests[0].test.get_result(),
+            result,
             tests,
             group,
         }
@@ -48,18 +49,24 @@ where R: std::fmt::Debug
         for test in &mut self.tests {
             let group = &mut self.group;
             // let checksum = self.checksum;
-            group.bench_with_input(BenchmarkId::new(test.name(), test.num_cpus), &(), |b, _| {
-                let pool = test.get_thread_pool();
-                b.iter_batched(
-                    || (),
-                    |_| {
-                        test.test.reset();
-                        pool.install(|| test.test.start());
-                        // test.test.verify(&self.result);
-                    },
-                    BatchSize::SmallInput,
-                );
-            });
+            group.bench_with_input(
+                BenchmarkId::new(test.name(), test.num_cpus),
+                &self.result,
+                |b, result| {
+                    let pool = test.get_thread_pool();
+                    b.iter_batched(
+                        || (),
+                        |_| {
+                            test.test.reset();
+                            pool.install(|| test.test.start());
+                            if let Some(result) = result {
+                                assert!(test.test.verify(result));
+                            }
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
         }
     }
 }
@@ -85,11 +92,6 @@ impl<'a, R> TestConfig<'a, R> {
         } else {
             "".to_string()
         };
-        self.test.name().to_string()
-            + "/"
-            + &backoff
-            + &self.len.to_string()
+        self.test.name().to_string() + "/" + &backoff + &self.len.to_string()
     }
 }
-
-
