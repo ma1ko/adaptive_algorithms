@@ -28,6 +28,14 @@ fn bench(c: &mut Criterion) {
     // two process scheduling
     let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
     let mut test: Vec<TestConfig<u64>> = vec![];
+    // Baseline (single-core)
+    let t = TestConfig {
+        len: times.len(),
+        num_cpus: 1,
+        backoff: None,
+        test: Box::new(BruteForce::new(times.clone())),
+    };
+    test.push(t);
     for i in &cpus {
         for s in vec![ 6, 8, ] {
             let t = TestConfig {
@@ -46,13 +54,7 @@ fn bench(c: &mut Criterion) {
         };
         test.push(t);
     }
-    let t = TestConfig {
-        len: times.len(),
-        num_cpus: 1,
-        backoff: None,
-        test: Box::new(BruteForce::new(times.clone())),
-    };
-    test.push(t);
+
 
     let mut b = BruteForce::new(times.clone());
     b.start();

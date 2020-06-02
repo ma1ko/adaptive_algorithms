@@ -18,7 +18,7 @@ pub struct Scheduling {
     pub decisions: Vec<usize>,
 }
 impl<'a> Scheduling {
-    pub fn new(remaining_times: Vec<u64>, mut procs: Vec<u64>) -> Self {
+    pub fn new(remaining_times: Vec<u64>, procs: Vec<u64>) -> Self {
         // procs[0] += remaining_times[0];
         Scheduling {
             remaining_times,
@@ -34,9 +34,10 @@ impl<'a> Task for Scheduling {
         // println!("Depth: {}, decisions: {:?}", self.index, self.decisions);
         // Sequential cut-off
         if self.remaining_times.len() - self.index <= 10 {
-            self.best = self
-                .best
-                .min(brute_force_rec(&mut self.procs, &mut self.remaining_times[self.index..]));
+            self.best = self.best.min(brute_force_rec(
+                &mut self.procs,
+                &mut self.remaining_times[self.index..],
+            ));
             return;
         }
         // this is always true with the cut-off
@@ -46,7 +47,6 @@ impl<'a> Task for Scheduling {
             self.procs[0] += new_decision;
             self.index += 1;
             self.run_();
-
 
             // try a different branch
             if let Some(decision) = self.decisions.pop() {
@@ -61,13 +61,10 @@ impl<'a> Task for Scheduling {
             }
             self.index -= 1;
             self.procs[P - 1] -= new_decision;
-        }
-        else {
+        } else {
             self.best = self.best.min(*self.procs.iter().max().unwrap());
             // println!("Best: {}", self.best);
-
         }
-
     }
     fn step(&mut self) {
         unimplemented!()
@@ -204,21 +201,37 @@ fn greedy_scheduling(times: &[u64]) -> u64 {
 }
 */
 
+// this is slooooooow
+// fn brute_force_rec(procs: &mut Vec<u64>, times: &[u64]) -> u64 {
+//     times
+//         .split_first()
+//         .map(|(time, remaining_times)| {
+//             (0..P)
+//                 .map(|i| {
+//                     procs[i] += time;
+//                     let r = brute_force_rec(procs, remaining_times);
+//                     procs[i] -= time;
+//                     r
+//                 })
+//                 .min()
+//                 .unwrap()
+//         })
+//         .unwrap_or_else(|| *procs.iter().max().unwrap())
+// }
 fn brute_force_rec(procs: &mut Vec<u64>, times: &[u64]) -> u64 {
-    times
-        .split_first()
-        .map(|(time, remaining_times)| {
-            (0..P)
-                .map(|i| {
-                    procs[i] += time;
-                    let r = brute_force_rec(procs, remaining_times);
-                    procs[i] -= time;
-                    r
-                })
-                .min()
-                .unwrap()
-        })
-        .unwrap_or_else(|| procs.iter().max().cloned().unwrap())
+    if times.is_empty() {
+        return *procs.iter().max().unwrap();
+    }
+    let (time, remaining_times) = times.split_first().unwrap();
+
+    let mut best = std::u64::MAX;
+    for i in 0..P {
+        procs[i] += time;
+        let r = brute_force_rec(procs, remaining_times);
+        procs[i] -= time;
+        best = best.min(r);
+    }
+    return best;
 }
 
 fn brute_force(times: &[u64]) -> u64 {
