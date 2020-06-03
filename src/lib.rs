@@ -11,9 +11,9 @@ pub mod task;
 #[macro_use]
 extern crate lazy_static;
 
-use crate::adaptive_bench::Benchable;
-use crate::scheduling::*;
-use crate::task::Task;
+pub use crate::adaptive_bench::Benchable;
+pub use crate::scheduling::*;
+pub use crate::task::Task;
 pub fn main() {
     // let remaining_times = vec![
     //     1, 2, 5, 20, 09, 20, 42, 13, 4, 20, 64, 6, 84, 20, 01, 91, 100, 5, 42, 25, 65, 39, 62, 35, 60, 25, 29, 53
