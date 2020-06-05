@@ -2,121 +2,172 @@
 //! we try to parallelize a brute force and branch and bound algorithm for
 //! the independant tasks scheduling problem (P||Cmax).
 // #![feature(integer_atomics)]
+use crate::steal;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const P: usize = 2; // the number of processors we simulate
+const P: usize = 3; // the number of processors we simulate
 
-use crate::task::Task;
+use crate::task::SimpleTask;
+use std::ops::Range;
 // use crate::task::NOTHING;
 
 pub struct Scheduling {
     pub remaining_times: Vec<u64>,
-    pub index: usize,
+    // pub index: usize,
     pub best: u64,
     pub procs: Vec<u64>,
-    pub decisions: Vec<usize>,
+    pub decisions: Vec<Range<usize>>,
 }
-impl<'a> Scheduling {
-    pub fn new(remaining_times: Vec<u64>, procs: Vec<u64>) -> Self {
+impl Scheduling {
+    pub fn new(remaining_times: &Vec<u64>, procs: &Vec<u64>) -> Self {
         // procs[0] += remaining_times[0];
-        Scheduling {
-            remaining_times,
-            index: 0,
+        let mut s = Scheduling {
+            remaining_times: remaining_times.clone(),
+            // index: 0,
             best: std::u64::MAX,
-            procs,
-            decisions: vec![],
+            procs: procs.clone(),
+            decisions: Vec::new(),
+        };
+        // Do the first step, else isFinished reports it's finished without doing anything :O
+        s.decisions.push(Range {
+            start: 0,
+            end: procs.len(),
+        });
+        s.procs[0] += s.remaining_times[0];
+        s
+    }
+    fn print(&mut self) {
+        // println!("-----------");
+        // println!("Times     : {:?}", self.remaining_times);
+        // println!("Decisions : {:?}", self.decisions);
+        // println!("Procs     : {:?}", self.procs);
+    }
+    pub fn redo_tree(&mut self) {
+        self.procs.iter_mut().for_each(|p| *p = 0);
+        // self.decisions
+        //     .iter()
+        //     .zip(&self.remaining_times)
+        //     .for_each(|(d, t)| self.procs[d.start] += t);
+        for i in 0..self.decisions.len() {
+            self.procs[self.decisions[i].start] += self.remaining_times[i];
         }
     }
 }
-impl<'a> Task for Scheduling {
-    fn run_(&mut self) {
+impl Scheduling {
+    fn next(&mut self) {
+        self.print();
+        // println!("^ Next())");
+        if let Some(mut d) = self.decisions.pop() {
+            self.procs[d.start] -= self.remaining_times[self.decisions.len()];
+            if d.start == d.end - 1 {
+                self.next();
+            } else {
+                d.start += 1;
+                self.procs[d.start] += 
+                    self.remaining_times[self.decisions.len()];
+                self.decisions.push(d);
+            }
+        }
+    }
+    fn split_range(range: &mut Range<usize>) -> Range<usize> {
+        assert!(range.start < range.end - 1); // needs to be splittable
+
+        let mid = (range.end + range.start) / 2;
+        let other = Range {
+            start: mid,
+            end: range.end,
+        };
+        range.end = mid;
+        other
+    }
+}
+impl SimpleTask for Scheduling {
+    fn step(&mut self) {
+        self.print();
         // println!("Depth: {}, decisions: {:?}", self.index, self.decisions);
         // Sequential cut-off
-        if self.remaining_times.len() - self.index <= 10 {
+        if self.remaining_times.len() - self.decisions.len() <= 8 {
             self.best = self.best.min(brute_force_rec(
                 &mut self.procs,
-                &mut self.remaining_times[self.index..],
+                &mut self.remaining_times[self.decisions.len()..],
             ));
+            // println!("{}", self.best);
+            self.next();
             return;
         }
-        // this is always true with the cut-off
-        if let Some(&new_decision) = self.remaining_times.get(self.index) {
-            // start with branch 0
-            self.decisions.push(0);
-            self.procs[0] += new_decision;
-            self.index += 1;
-            self.run_();
-
-            // try a different branch
-            if let Some(decision) = self.decisions.pop() {
-                if decision < P - 1 {
-                    self.procs[decision] -= new_decision;
-                    let decision = decision + 1;
-                    self.procs[decision] += new_decision;
-                    self.decisions.push(decision);
-                    self.run_();
-                    self.decisions.pop();
-                }
-            }
-            self.index -= 1;
-            self.procs[P - 1] -= new_decision;
-        } else {
-            self.best = self.best.min(*self.procs.iter().max().unwrap());
-            // println!("Best: {}", self.best);
-        }
-    }
-    fn step(&mut self) {
-        unimplemented!()
+        self.decisions.push(Range {
+            start: 0,
+            end: self.procs.len(),
+        });
+        self.procs[0] += self.remaining_times[self.decisions.len() - 1];
     }
     fn can_split(&self) -> bool {
         true
     }
-    fn split(&mut self) -> Self {
-        assert_eq!(self.procs.len(), 2);
-        let time = self.remaining_times.pop().unwrap();
 
+    fn split(&mut self, runner: impl Fn(&mut Self, &mut Self)) {
+        // println!("Splitting");
+        // println!("Trees: {:?}", self.decisions);
         let mut other = Scheduling {
             remaining_times: self.remaining_times.clone(),
-            index: self.index,
             best: self.best,
             procs: self.procs.clone(),
-            decisions: Vec::new(),
+            decisions: self.decisions.clone(),
         };
-        self.procs[0] += time;
-        other.procs[1] += time;
-        return other;
+        for i in 0..self.decisions.len() {
+            if self.decisions[i].start < self.decisions[i].end - 1 {
+                let other_range = Scheduling::split_range(&mut self.decisions[i]);
+                // self.decisions[i] = my_range;
+                other.decisions[i] = other_range;
+                other.decisions.truncate(i + 1);
+                other.redo_tree();
+                break;
+            }
+        }
+        // println!("New Trees: {:?} vs {:?}", self.decisions, other.decisions);
+        // assert!(self.decisions != other.decisions); // we should have a different choice somewhere
+        if self.decisions == other.decisions {
+            // We couldn't split
+            return;
+
+        }
+        runner(self, &mut other);
     }
-    fn fuse(&mut self, other: Self) {
-        // let time = self.splits.pop().unwrap();
-        // self.procs[0] -= time;
-        // self.remaining_times.push(time);
-        unsafe { self.remaining_times.set_len(self.remaining_times.len() + 1) }
+    fn fuse(&mut self, other: &mut Self) {
         self.best = other.best.min(self.best);
     }
     fn is_finished(&self) -> bool {
-        unimplemented!()
-        // *self.best != std::u64::MAX
+        self.decisions.is_empty()
     }
 }
 
 #[test]
 fn test_scheduling() {
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
-        .take(15)
+        .take(14)
         .collect();
-    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
-    let mut s = Scheduling::new(times.clone(), procs);
+    let procs: Vec<u64> = std::iter::repeat(0).take(P).collect();
+
+    let mut s = Scheduling::new(&times, &procs);
     s.start();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(3)
+        .steal_callback(|x| steal::steal(8, x))
+        .build()
+        .unwrap();
+    let mut s = Scheduling::new(&times, &procs);
+    pool.install(|| s.start());
     let mut b = BruteForcePar::new(times.clone());
     b.start();
     assert_eq!(s.get_result(), b.get_result());
+    s.verify(&b.get_result());
 }
 
 use crate::adaptive_bench::Benchable;
 impl<'a> Benchable<'a, u64> for Scheduling {
     fn start(&mut self) -> () {
-        self.run_()
+        self.run()
     }
     fn name(&self) -> &'static str {
         "Adaptive_Scheduling"
@@ -125,7 +176,9 @@ impl<'a> Benchable<'a, u64> for Scheduling {
         self.best
     }
     fn reset(&mut self) {
-        self.best = std::u64::MAX;
+        self.procs.iter_mut().for_each(|p| *p = 0);
+        *self = Self::new(&self.remaining_times, &self.procs);
+        // self.best = std::u64::MAX;
     }
     fn verify(&self, result: &u64) -> bool {
         assert_eq!(*result, self.best);
@@ -242,11 +295,10 @@ fn brute_force(times: &[u64]) -> u64 {
 fn brute_force_par(times: &[u64]) -> u64 {
     // START_REPLACING
     let mut procs: Vec<u64> = std::iter::repeat(0).take(P).collect();
-    brute_force_rec_par(&mut procs, times, 3)
+    brute_force_rec_par(&mut procs, times, 4)
     // END_COMMENTING
 }
 
-// START_COMMENTING
 fn brute_force_rec_par(procs: &mut Vec<u64>, times: &[u64], levels: usize) -> u64 {
     if levels == 0 {
         return brute_force_rec(procs, times);
@@ -270,7 +322,6 @@ fn brute_force_rec_par(procs: &mut Vec<u64>, times: &[u64], levels: usize) -> u6
         })
         .unwrap_or_else(|| procs.iter().max().cloned().unwrap())
 }
-// END_COMMENTING
 
 fn branch_and_bound(times: &[u64], initial_solution: u64) -> u64 {
     let mut procs: Vec<u64> = std::iter::repeat(0).take(P).collect();
@@ -299,7 +350,6 @@ fn branch_and_bound_rec(procs: &mut Vec<u64>, times: &[u64], mut best_solution: 
 }
 
 fn branch_and_bound_par(times: &[u64], initial_solution: u64) -> u64 {
-    // START_REPLACING
     let mut procs: Vec<u64> = std::iter::repeat(0).take(P).collect();
     let best_value = AtomicU64::new(initial_solution);
     branch_and_bound_rec_par(&mut procs, times, &best_value);
@@ -307,7 +357,6 @@ fn branch_and_bound_par(times: &[u64], initial_solution: u64) -> u64 {
     // END_COMMENTING
 }
 
-// START_COMMENTING
 fn branch_and_bound_rec_par(procs: &mut Vec<u64>, times: &[u64], best_solution: &AtomicU64) {
     if procs.iter().max().cloned().unwrap() < best_solution.load(Ordering::SeqCst) {
         times
@@ -346,7 +395,6 @@ fn branch_and_bound_rec_fallback(procs: &mut Vec<u64>, times: &[u64], best_solut
             });
     }
 }
-// END_COMMENTING
 
 fn compute_lower_bound(times: &[u64], times_sum: u64) -> u64 {
     debug_assert_eq!(times.iter().sum::<u64>(), times_sum);
@@ -356,48 +404,4 @@ fn compute_lower_bound(times: &[u64], times_sum: u64) -> u64 {
     )
 }
 
-pub fn main() {
-    // let n: usize = std::env::args()
-    //     .nth(1)
-    //     .and_then(|arg| arg.parse().ok())
-    //     .expect("give number of tasks");
-    let n = 18;
-    let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
-        //.enumerate()
-        //.map(|(i, e)| e / (i as u64 + 1))
-        .take(n)
-        .collect();
 
-    println!("times are {:?}", times);
-
-    let lower_bound = compute_lower_bound(&times, times.iter().sum());
-    println!("lower bound is {}", lower_bound);
-
-    let start = std::time::Instant::now();
-    println!(
-        "brute force : {} in {}",
-        brute_force(&times),
-        std::time::Instant::now().duration_since(start).as_millis()
-    );
-
-    let start = std::time::Instant::now();
-    println!(
-        "brute force par : {} in {}",
-        brute_force_par(&times),
-        std::time::Instant::now().duration_since(start).as_millis()
-    );
-
-    let start = std::time::Instant::now();
-    println!(
-        "b&b : {} in {}",
-        branch_and_bound(&times, std::u64::MAX),
-        std::time::Instant::now().duration_since(start).as_millis()
-    );
-
-    let start = std::time::Instant::now();
-    println!(
-        "b&b par : {} in {}",
-        branch_and_bound_par(&times, std::u64::MAX),
-        std::time::Instant::now().duration_since(start).as_millis()
-    );
-}

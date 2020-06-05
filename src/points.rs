@@ -58,9 +58,6 @@ impl<'a> Benchable<'a, f64> for Searcher<'a> {
     }
     fn reset(&mut self) {
         *self = Searcher::new(&self.points);
-        // self.min = 100.0;
-        // self.start_index = 0;
-        // self.end_index
     }
 }
 
@@ -114,7 +111,7 @@ impl<'a> Task for Tester<'a> {
     fn step(&mut self) {
         let mut min = self.min;
         let point = self.point;
-        let end_index =(self.start_index + 128).min(self.end_index);
+        let end_index = (self.start_index + 128).min(self.end_index);
         let others = &self.points[self.start_index..end_index];
         for other in others {
             min = min.min(point.distance_to(other));

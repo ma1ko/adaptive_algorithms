@@ -1,10 +1,8 @@
 use adaptive_algorithms::adaptive_bench::*;
 use adaptive_algorithms::scheduling::*;
-use criterion::BenchmarkGroup;
 use criterion::*;
 extern crate rand;
 
-use adaptive_algorithms::points::*;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("Scheduling");
@@ -19,14 +17,12 @@ fn bench(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let n = 22;
+    let n = 15;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
-        //.enumerate()
-        //.map(|(i, e)| e / (i as u64 + 1))
         .take(n)
         .collect();
     // two process scheduling
-    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
+    let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
     let mut test: Vec<TestConfig<u64>> = vec![];
     // Baseline (single-core)
     let t = TestConfig {
@@ -43,8 +39,8 @@ fn bench(c: &mut Criterion) {
                 num_cpus: *i,
                 backoff: Some(s),
                 test: Box::new(Scheduling::new(
-                    times.clone(),
-                    procs.clone(),
+                    &times,
+                    &procs,
                 )),
             };
             test.push(t);
