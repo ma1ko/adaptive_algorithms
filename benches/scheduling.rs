@@ -13,7 +13,7 @@ fn bench(c: &mut Criterion) {
     group.sample_size(10);
     group.nresamples(10);
 
-    let cpus: Vec<usize> = vec![1,2, 3, 4, 8, 16, 24, 32]
+    let cpus: Vec<usize> = vec![1, 2, 3, 4, 8, 16, 24, 32]
         .iter()
         .filter(|&&i| i <= num_cpus::get())
         .cloned()
@@ -37,12 +37,15 @@ fn bench(c: &mut Criterion) {
     };
     test.push(t);
     for i in &cpus {
-        for s in vec![ 6, 8, ] {
+        for s in vec![6, 8] {
             let t = TestConfig {
                 len: times.len(),
                 num_cpus: *i,
                 backoff: Some(s),
-                test: Box::new(Scheduling::new(times.clone(), procs.clone())),
+                test: Box::new(Scheduling::new(
+                    times.clone(),
+                    procs.clone(),
+                )),
             };
             test.push(t);
         }
@@ -54,7 +57,6 @@ fn bench(c: &mut Criterion) {
         };
         test.push(t);
     }
-
 
     let mut b = BruteForce::new(times.clone());
     b.start();

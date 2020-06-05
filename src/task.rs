@@ -38,17 +38,20 @@ pub trait Task: Send + Sync + Sized {
             self.step();
         }
     }
-    fn run_recursive(&mut self) {
-        let steal_counter = steal::get_my_steal_count();
-        if steal_counter != 0 && self.can_split() {
-            let mut other = self.split();
-            self.split_run(steal_counter, Some(&mut other));
-            self.fuse(other);
-        }
-        // self.run_(other);
-        self.run_();
-    }
+    // fn run_recursive(&mut self) {
+    //     let steal_counter = steal::get_my_steal_count();
+    //     if steal_counter != 0 && self.can_split() {
+    //         let mut other = self.split();
+    //         self.split_run(steal_counter, Some(&mut other));
+    //         self.fuse(other);
+    //     }
+    //     // self.run_(other);
+    //     self.run_();
+    // }
     fn step(&mut self);
+    fn split_run_(&mut self) {
+        self.split_run(1, NOTHING)
+    }
     fn split_run(&mut self, steal_counter: usize, mut f: Option<&mut impl Task>) {
         // run the parent task
         if let Some(f) = f.take() {
@@ -87,6 +90,9 @@ pub trait Task: Send + Sync + Sized {
             self.fuse(other);
         }
     }
+    fn check_(&mut self) {
+        self.check(NOTHING);
+    }
     fn check(&mut self, mut f: Option<&mut impl Task>) {
         let steal_counter = steal::get_my_steal_count();
         if steal_counter != 0 && self.can_split() {
@@ -97,4 +103,49 @@ pub trait Task: Send + Sync + Sized {
     fn is_finished(&self) -> bool;
     fn split(&mut self) -> Self;
     fn fuse(&mut self, _other: Self) {}
+}
+
+pub trait SimpleTask: Send + Sync {
+    fn run(&mut self) {
+        while !self.is_finished() {
+            let steal_counter = steal::get_my_steal_count();
+            if steal_counter != 0 && self.can_split() {
+                self.split_run(steal_counter);
+                continue;
+            }
+            self.step();
+        }
+    }
+    fn step(&mut self);
+    fn check(&mut self) {
+        let steal_counter = steal::get_my_steal_count();
+        if steal_counter != 0 && self.can_split() {
+            self.split_run(steal_counter);
+        }
+    }
+    fn split_run(&mut self, steal_counter: usize) {
+        let runner = |left: &mut Self, right: &mut Self| {
+            if steal_counter < 2 {
+                rayon::join(
+                    || {
+                        steal::reset_my_steal_count();
+                        left.run()
+                    },
+                    || right.run(),
+                );
+                left.fuse(right);
+            } else {
+                rayon::join(
+                    || left.split_run(steal_counter / 2),
+                    || right.split_run(steal_counter / 2),
+                );
+                left.fuse(right);
+            }
+        };
+        self.split(runner);
+    }
+    fn can_split(&self) -> bool;
+    fn is_finished(&self) -> bool;
+    fn split(&mut self, runner: impl Fn(&mut Self, &mut Self));
+    fn fuse(&mut self, _other: &Self);
 }

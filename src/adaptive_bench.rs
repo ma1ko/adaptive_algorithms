@@ -3,11 +3,13 @@ use rayon;
 pub use crate::steal;
 
 pub trait Benchable<'a, R>: Send + Sync {
-    fn start(&mut self) -> ();
-    fn name(&self) -> &'static str;
-    // fn id(&self) -> BenchmarkId;
-    fn verify(&self, _result: &R) -> bool { true} 
-    fn get_result(&self) -> R;
+    fn start(&mut self); // run the test
+    fn name(&self) -> &'static str; // give it a nice name
+    // fn id(&self) -> BenchmarkId; // not required, we create one directly
+    fn verify(&self, _result: &R) -> bool { true} // if you want to verify for correctness
+    fn get_result(&self) -> R {
+        unimplemented!() // If you don't want to check for the result
+    }
     fn get_thread_pool(&self, num_threads: usize, backoffs: Option<usize>) -> rayon::ThreadPool {
         let mut pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads);
         if let Some(backoffs) = backoffs {
@@ -15,17 +17,15 @@ pub trait Benchable<'a, R>: Send + Sync {
         }
         pool.build().unwrap()
     }
-    fn reset(&mut self) {}
+    // reset the test, will get called after every test so we can reuse it.
+    fn reset(&mut self); 
 }
 
 use criterion::BenchmarkGroup;
 use criterion::*;
 type Group<'a> = BenchmarkGroup<'a, criterion::measurement::WallTime>;
 pub struct Tester<'a, R>
-where
-    R: std::fmt::Debug,
 {
-    // data : T,
     result: Option<R>,
     tests: Vec<TestConfig<'a, R>>,
     group: Group<'a>,
@@ -59,6 +59,7 @@ where
                         |_| {
                             test.test.reset();
                             pool.install(|| test.test.start());
+                            // Optional verification
                             if let Some(result) = result {
                                 assert!(test.test.verify(result));
                             }
@@ -70,11 +71,6 @@ where
         }
     }
 }
-trait Test<T> {
-    fn run(&self, numbers: &mut Vec<T>) -> ();
-    fn name(&self) -> &'static str;
-    fn id(&self) -> BenchmarkId;
-}
 
 pub struct TestConfig<'a, R> {
     pub len: usize,
@@ -83,6 +79,10 @@ pub struct TestConfig<'a, R> {
     pub test: Box<dyn Benchable<'a, R> + 'a>,
 }
 impl<'a, R> TestConfig<'a, R> {
+    pub fn new(len: usize, num_cpus: usize, backoff: Option<usize>, test: Box<dyn Benchable<'a, R> + 'a>) -> TestConfig<'a, R> {
+        TestConfig {len, num_cpus, backoff, test}
+
+    }
     pub fn get_thread_pool(&self) -> rayon::ThreadPool {
         self.test.get_thread_pool(self.num_cpus, self.backoff)
     }
