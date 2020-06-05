@@ -6,7 +6,7 @@ use crate::steal;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const P: usize = 3; // the number of processors we simulate
+const P: usize = 2; // the number of processors we simulate
 
 use crate::task::SimpleTask;
 use std::ops::Range;
@@ -145,7 +145,7 @@ impl SimpleTask for Scheduling {
 #[test]
 fn test_scheduling() {
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
-        .take(14)
+        .take(20)
         .collect();
     let procs: Vec<u64> = std::iter::repeat(0).take(P).collect();
 
@@ -278,7 +278,7 @@ fn brute_force_rec(procs: &mut Vec<u64>, times: &[u64]) -> u64 {
     let (time, remaining_times) = times.split_first().unwrap();
 
     let mut best = std::u64::MAX;
-    for i in 0..P {
+    for i in 0..procs.len() {
         procs[i] += time;
         let r = brute_force_rec(procs, remaining_times);
         procs[i] -= time;
