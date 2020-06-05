@@ -147,5 +147,5 @@ pub trait SimpleTask: Send + Sync {
     fn can_split(&self) -> bool;
     fn is_finished(&self) -> bool;
     fn split(&mut self, runner: impl Fn(&mut Self, &mut Self));
-    fn fuse(&mut self, _other: &Self);
+    fn fuse(&mut self, _other: &mut Self);
 }
