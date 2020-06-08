@@ -48,7 +48,7 @@ impl<'a> Benchable<'a, f64> for Searcher<'a> {
         self.run_();
     }
     fn name(&self) -> &'static str {
-        "Apdaptive Nearest Points Search"
+        "Adaptive Nearest Points Search"
     }
     fn verify(&self, result: &f64) -> bool {
         *result == self.min
@@ -79,23 +79,23 @@ impl<'a> Task for Searcher<'a> {
         return self.end_index - self.start_index > 16;
     }
 
-    fn split(&mut self) -> Self {
+    fn split(&mut self, mut runner: impl FnMut(&mut Self, &mut Self)) {
         let half = (self.end_index - self.start_index) / 2 + self.start_index;
-        let other: Searcher<'a> = Searcher {
+        let mut other: Searcher<'a> = Searcher {
             points: self.points,
             start_index: half,
             end_index: self.end_index,
             min: self.min,
         };
         self.end_index = half;
-        other
+        runner(self, &mut other);
     }
 
     fn is_finished(&self) -> bool {
         assert!(self.end_index >= self.start_index);
         self.end_index == self.start_index
     }
-    fn fuse(&mut self, other: Self) {
+    fn fuse(&mut self, other: &mut Self) {
         self.min = self.min.min(other.min);
     }
 }
@@ -111,7 +111,7 @@ impl<'a> Task for Tester<'a> {
     fn step(&mut self) {
         let mut min = self.min;
         let point = self.point;
-        let end_index = (self.start_index + 128).min(self.end_index);
+        let end_index = (self.start_index + 1024).min(self.end_index);
         let others = &self.points[self.start_index..end_index];
         for other in others {
             min = min.min(point.distance_to(other));
@@ -122,9 +122,9 @@ impl<'a> Task for Tester<'a> {
     fn can_split(&self) -> bool {
         self.end_index - self.start_index > 1024
     }
-    fn split(&mut self) -> Self {
+    fn split(&mut self, mut runner: impl FnMut(&mut Self, &mut Self)) {
         let half = (self.end_index - self.start_index) / 2 + self.start_index;
-        let other: Tester<'a> = Tester {
+        let mut other: Tester<'a> = Tester {
             points: self.points,
             point: self.point,
             start_index: half,
@@ -132,12 +132,12 @@ impl<'a> Task for Tester<'a> {
             min: self.min,
         };
         self.end_index = half;
-        other
+        runner(self, &mut other);
     }
     fn is_finished(&self) -> bool {
         self.end_index == self.start_index
     }
-    fn fuse(&mut self, other: Self) {
+    fn fuse(&mut self, other: &mut Self) {
         self.min = self.min.min(other.min);
     }
 }

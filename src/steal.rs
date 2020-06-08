@@ -17,8 +17,8 @@ pub fn optimized_steal(victim: usize) -> Option<()> {
     let backoffs = match num_threads {
         1 => panic!("Can't steal from myself"), // What are we even doing here?
         2..=8 => 6,
-        9..=16 => 4,
-        _ => 2,
+        9..=12 => 4,
+        _ => 1,
     };
     V[victim].fetch_or(thread_index, Ordering::Relaxed);
 
