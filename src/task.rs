@@ -125,7 +125,7 @@ pub trait SimpleTask: Send + Sync {
     }
     fn split_run(&mut self, steal_counter: usize) {
         let runner = |left: &mut Self, right: &mut Self| {
-            if steal_counter < 2 {
+            if steal_counter < 2 || !left.can_split() || !right.can_split() {
                 rayon::join(
                     || {
                         steal::reset_my_steal_count();

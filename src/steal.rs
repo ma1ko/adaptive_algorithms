@@ -1,5 +1,6 @@
 use crossbeam_utils::{Backoff, CachePadded};
 use num_cpus;
+use rayon::current_num_threads;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 lazy_static! {
@@ -8,14 +9,32 @@ lazy_static! {
         .map(|_| CachePadded::new(AtomicUsize::new(0)))
         .collect();
 }
-// pub fn active() {
-//     let thread_index = rayon::current_thread_index().unwrap();
-//     V[thread_index].1.store(true, Ordering::Relaxed);
-// }
-// pub fn inactive() {
-//     let thread_index = rayon::current_thread_index().unwrap();
-//     V[thread_index].1.store(false, Ordering::Relaxed);
-// }
+
+pub fn optimized_steal(victim: usize) -> Option<()> {
+    let thread_index = rayon::current_thread_index().unwrap();
+    let thread_index = 1 << thread_index;
+    let num_threads = rayon::current_num_threads();
+    let backoffs = match num_threads {
+        1 => panic!("Can't steal from myself"), // What are we even doing here?
+        2..=8 => 6,
+        9..=16 => 4,
+        _ => 2,
+    };
+    V[victim].fetch_or(thread_index, Ordering::Relaxed);
+
+    let backoff = Backoff::new();
+    let mut c: usize;
+    for _ in 0..backoffs{
+        backoff.spin(); // spin or snooze()?
+
+        c = V[victim].load(Ordering::Relaxed);
+        if c == 0 {
+            return Some(());
+        }
+    }
+    V[victim].fetch_and(!thread_index, Ordering::Relaxed);
+    None
+}
 
 pub fn steal(backoffs: usize, victim: usize) -> Option<()> {
     let thread_index = rayon::current_thread_index().unwrap();

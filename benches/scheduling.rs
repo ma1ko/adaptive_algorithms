@@ -17,23 +17,23 @@ fn bench(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let n = 22;
+    let n = 13;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(n)
         .collect();
     // two process scheduling
-    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
+    let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
     let mut test: Vec<TestConfig<u64>> = vec![];
     // Baseline (single-core)
     let t = TestConfig {
         len: times.len(),
         num_cpus: 1,
         backoff: None,
-        test: Box::new(BruteForce::new(times.clone())),
+        test: Box::new(BruteForce::new(times.clone(), procs.clone())),
     };
     test.push(t);
     for i in &cpus {
-        for s in vec![6, 8] {
+        for s in vec![0,6, 8] {
             let t = TestConfig {
                 len: times.len(),
                 num_cpus: *i,
@@ -49,12 +49,12 @@ fn bench(c: &mut Criterion) {
             len: times.len(),
             num_cpus: *i,
             backoff: None,
-            test: Box::new(BruteForcePar::new(times.clone())),
+            test: Box::new(BruteForcePar::new(times.clone(), procs.clone())),
         };
         test.push(t);
     }
 
-    let mut b = BruteForce::new(times.clone());
+    let mut b = BruteForce::new(times.clone(), procs.clone());
     b.start();
 
     let mut t = Tester::new(test, group, Some(b.get_result()));

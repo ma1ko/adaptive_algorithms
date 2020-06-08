@@ -48,7 +48,7 @@ impl<'a> Benchable<'a, f64> for Searcher<'a> {
         self.run_();
     }
     fn name(&self) -> &'static str {
-        "adaptive_point_search"
+        "Apdaptive Nearest Points Search"
     }
     fn verify(&self, result: &f64) -> bool {
         *result == self.min
