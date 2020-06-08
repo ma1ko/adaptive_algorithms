@@ -6,7 +6,7 @@ use crate::steal;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const P: usize = 2; // the number of processors we simulate
+const P: usize = 3; // the number of processors we simulate
 
 use crate::task::SimpleTask;
 use std::ops::Range;
@@ -115,8 +115,10 @@ impl SimpleTask for Scheduling {
             procs: self.procs.clone(),
             decisions: self.decisions.clone(),
         };
+        let mut split = false;
         for i in 0..self.decisions.len() {
             if self.decisions[i].start < self.decisions[i].end - 1 {
+                split = true;
                 let other_range = Scheduling::split_range(&mut self.decisions[i]);
                 // self.decisions[i] = my_range;
                 other.decisions[i] = other_range;
@@ -125,13 +127,14 @@ impl SimpleTask for Scheduling {
                 break;
             }
         }
-        // println!("New Trees: {:?} vs {:?}", self.decisions, other.decisions);
-        // assert!(self.decisions != other.decisions); // we should have a different choice somewhere
-        if self.decisions == other.decisions {
+        if ! split {
             // We couldn't split
+            println!("Couldn't split");
+            println!("New Trees: {:?} vs {:?}", self.decisions, other.decisions);
             return;
 
         }
+        assert!(self.decisions != other.decisions); // we should have a different choice somewhere
         runner(self, &mut other);
     }
     fn fuse(&mut self, other: &mut Self) {
@@ -145,7 +148,7 @@ impl SimpleTask for Scheduling {
 #[test]
 fn test_scheduling() {
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
-        .take(20)
+        .take(14)
         .collect();
     let procs: Vec<u64> = std::iter::repeat(0).take(P).collect();
 

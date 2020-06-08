@@ -17,12 +17,12 @@ fn bench(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let n = 15;
+    let n = 22;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(n)
         .collect();
     // two process scheduling
-    let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
+    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
     let mut test: Vec<TestConfig<u64>> = vec![];
     // Baseline (single-core)
     let t = TestConfig {
