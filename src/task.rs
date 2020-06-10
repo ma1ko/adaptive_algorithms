@@ -1,3 +1,4 @@
+use crate::rayon;
 use crate::steal;
 
 // if you can't use None because of typing errors, use Nothing
