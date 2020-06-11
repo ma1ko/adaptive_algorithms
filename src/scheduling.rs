@@ -7,12 +7,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 // const P: usize = 2; // the number of processors we simulate
 
-use crate::rayon::{get_adaptive_thread_pool, subgraph};
-use crate::task::SimpleTask;
+use crate::task::*;
 use rayon::prelude::*;
 use std::ops::Range;
 // use crate::task::NOTHING;
 
+#[derive(Debug)]
 pub struct Scheduling {
     pub remaining_times: Vec<u64>,
     // pub index: usize,
@@ -106,39 +106,44 @@ impl SimpleTask for Scheduling {
         self.decisions.iter().any(|r| r.end - r.start >= 2)
     }
 
-    fn split(&mut self, runner: impl Fn(&mut Self, &mut Self)) {
-        // println!("Splitting");
-        // println!("Trees: {:?}", self.decisions);
-        let mut other = Scheduling {
-            remaining_times: self.remaining_times.clone(),
-            best: self.best,
-            procs: self.procs.clone(),
-            decisions: self.decisions.clone(),
-        };
-        let mut split = false;
+    fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
+        let mut splits = Vec::new();
+        let mut split = 0;
         for i in 0..self.decisions.len() {
             if self.decisions[i].end - self.decisions[i].start >= 2 {
-                split = true;
+                let mut other = Scheduling {
+                    remaining_times: self.remaining_times.clone(),
+                    best: self.best,
+                    procs: self.procs.clone(),
+                    decisions: self.decisions.clone(),
+                };
+
                 let other_range = Scheduling::split_range(&mut self.decisions[i]);
                 // self.decisions[i] = my_range;
                 other.decisions[i] = other_range;
                 other.decisions.truncate(i + 1);
                 other.redo_tree();
-                break;
+                splits.push(other);
+                split += 1;
+                if split == steal_counter {
+                    break;
+                }
             }
         }
-        if !split {
-            // We couldn't split
+        if split == 0 {
+            // This might be possible, but I haven't seen it in a bit
             assert!(false, "Couldn't split");
-            // println!("Couldn't split");
-            // println!("New Trees: {:?} vs {:?}", self.decisions, other.decisions);
             return;
         }
-        assert!(self.decisions != other.decisions); // we should have a different choice somewhere
+        // assert!(self.decisions != other.decisions); // we should have a different choice somewhere
 
         // println!("Actually split");
-        // println!("New Trees: {:?} vs {:?}", self.decisions, other.decisions);
-        runner(self, &mut other);
+        let mut splits = splits.iter_mut().collect::<Vec<&mut Self>>();
+        splits.insert(0, self);
+        // if splits.len() >= 3 {
+        //     println!("New Trees: {:?} ", splits);
+        // }
+        runner(&mut splits);
     }
     fn fuse(&mut self, other: &mut Self) {
         self.best = other.best.min(self.best);
@@ -150,6 +155,7 @@ impl SimpleTask for Scheduling {
 
 #[test]
 fn test_scheduling() {
+    use crate::rayon::get_adaptive_thread_pool;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(12)
         .collect();

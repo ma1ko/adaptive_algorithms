@@ -16,7 +16,7 @@ impl Task for Dummy {
         false
     }
 
-    fn split(&mut self, _runner: impl FnMut(&mut Self, &mut Self)) {
+    fn split(&mut self, _runner: impl FnMut(Vec<&mut Self>), _steal_counter: usize) {
         assert!(false);
     }
     fn is_finished(&self) -> bool {
@@ -47,7 +47,7 @@ pub trait Task: Send + Sync + Sized {
         self.split_run(1, NOTHING)
     }
 
-    fn runner<T: Task>(&mut self, left: &mut T, mut right: &mut T) {
+    fn _runner<T: Task>(&mut self, left: &mut T, mut right: &mut T) {
         rayon::join(
             || {
                 steal::reset_my_steal_count();
@@ -59,37 +59,49 @@ pub trait Task: Send + Sync + Sized {
         left.fuse(&mut right);
         return;
     }
-    fn split_run(&mut self, steal_counter: usize, mut f: Option<&mut impl Task>) {
-        // run the parent task
-        if let Some(f) = f.take() {
-            if f.can_split() {
-                f.split(move |left, right| self.runner(left, right));
-                return;
-            }
+    fn runner(f: Option<&mut impl Task>, mut tasks: Vec<&mut Self>) {
+        if let Some(f) = f {
+            rayon::join(|| Self::runner(NOTHING, tasks), || f.run_());
+        } else if let Some(task) = tasks.pop() {
+            rayon::join(|| Self::runner(NOTHING, tasks), || task.run_());
+        } else {
+            steal::reset_my_steal_count();
         }
-        let runner = |left: &mut Self, right: &mut Self| {
-            if steal_counter < 2 || !left.can_split() || !right.can_split() {
-                rayon::join(
-                    || {
-                        steal::reset_my_steal_count();
-                        left.run(NOTHING)
-                    },
-                    || right.run(NOTHING),
-                );
-                left.fuse(right);
-            } else {
-                rayon::join(
-                    || left.split_run(steal_counter / 2, NOTHING),
-                    || right.split_run(steal_counter / 2, NOTHING),
-                );
-                left.fuse(right);
-            }
-        };
-        self.split(runner);
+    }
+
+    fn split_run(&mut self, steal_counter: usize, mut f: Option<&mut impl Task>) {
+        // // run the parent task
+        // if let Some(f) = f.take() {
+        //     if f.can_split() {
+        //         f.split(move |left, right| self.runner(left, right));
+        //         return;
+        //     }
+        // }
+        // let runner = |left: &mut Self, right: &mut Self| {
+        //     if steal_counter < 2 || !left.can_split() || !right.can_split() {
+        //         rayon::join(
+        //             || {
+        //                 steal::reset_my_steal_count();
+        //                 left.run(NOTHING)
+        //             },
+        //             || right.run(NOTHING),
+        //         );
+        //         left.fuse(right);
+        //     } else {
+        //         rayon::join(
+        //             || left.split_run(steal_counter / 2, NOTHING),
+        //             || right.split_run(steal_counter / 2, NOTHING),
+        //         );
+        //         left.fuse(right);
+        //     }
+        // };
+        let mut f = f.take();
+        self.split(move |x| Self::runner(f.take(), x), steal_counter);
     }
     fn check_(&mut self) {
         self.check(NOTHING);
     }
+
     fn check(&mut self, mut f: Option<&mut impl Task>) {
         let steal_counter = steal::get_my_steal_count();
         if steal_counter != 0 && self.can_split() {
@@ -98,7 +110,7 @@ pub trait Task: Send + Sync + Sized {
     }
     fn can_split(&self) -> bool;
     fn is_finished(&self) -> bool;
-    fn split(&mut self, runner: impl FnMut(&mut Self, &mut Self));
+    fn split(&mut self, runner: impl FnMut(Vec<&mut Self>), steal_counter: usize);
     fn fuse(&mut self, _other: &mut Self);
 }
 
@@ -120,29 +132,26 @@ pub trait SimpleTask: Send + Sync {
             self.split_run(steal_counter);
         }
     }
-    fn split_run(&mut self, steal_counter: usize) {
-        let runner = |left: &mut Self, right: &mut Self| {
-            if steal_counter < 2 || !left.can_split() || !right.can_split() {
-                rayon::join(
-                    || {
-                        steal::reset_my_steal_count();
-                        left.run()
-                    },
-                    || right.run(),
-                );
-                left.fuse(right);
-            } else {
-                rayon::join(
-                    || left.split_run(steal_counter / 2),
-                    || right.split_run(steal_counter / 2),
-                );
-                left.fuse(right);
+    fn runner(tasks: &mut Vec<&mut Self>) {
+        // if let Some(task) = tasks.pop() {
+        if !tasks.is_empty() {
+            let task = tasks.remove(0);
+            rayon::join(|| Self::runner(tasks), || task.run());
+
+            if let Some(other) = tasks.pop() {
+                task.fuse(other);
             }
-        };
-        self.split(runner);
+            tasks.push(task);
+        } else {
+            steal::reset_my_steal_count();
+        }
+    }
+
+    fn split_run(&mut self, steal_counter: usize) {
+        self.split(Self::runner, steal_counter);
     }
     fn can_split(&self) -> bool;
     fn is_finished(&self) -> bool;
-    fn split(&mut self, runner: impl Fn(&mut Self, &mut Self));
+    fn split(&mut self, runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize);
     fn fuse(&mut self, _other: &mut Self);
 }
