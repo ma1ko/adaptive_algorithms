@@ -11,7 +11,7 @@ fn main() {
 
     let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
 
-    let pool = get_adaptive_thread_pool();
+    let pool = get_thread_pool();
 
     let mut s = Scheduling::new(&times, &procs);
 
