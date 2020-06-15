@@ -1,5 +1,4 @@
 use adaptive_algorithms::adaptive_bench::*;
-use criterion::BenchmarkGroup;
 use criterion::*;
 extern crate rand;
 

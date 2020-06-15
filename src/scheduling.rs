@@ -155,7 +155,7 @@ impl SimpleTask for Scheduling {
 
 #[test]
 fn test_scheduling() {
-    use crate::rayon::get_adaptive_thread_pool;
+    use crate::rayon::get_thread_pool;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(12)
         .collect();
@@ -163,7 +163,7 @@ fn test_scheduling() {
 
     let mut s = Scheduling::new(&times, &procs);
     s.start();
-    let pool = get_adaptive_thread_pool();
+    let pool = get_thread_pool();
     let mut s = Scheduling::new(&times, &procs);
     pool.install(|| s.start());
     // s.start();
@@ -305,8 +305,31 @@ fn brute_force(times: &[u64], mut procs: Vec<u64>) -> u64 {
 }
 
 fn brute_force_par(times: &[u64], mut procs: Vec<u64>) -> u64 {
+    if procs.len() == 2 {
+        // Really only works for two processors...
+        return brute_force_rec_par_split(procs, times);
+    }
+    let levels = (rayon::current_num_threads() as f64).log2().ceil() * 2.0;
     // let mut procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
-    brute_force_rec_par(&mut procs, times, 4)
+    brute_force_rec_par(&mut procs, times, levels as usize)
+}
+
+fn brute_force_rec_par_split(procs: Vec<u64>, times: &[u64]) -> u64 {
+    rayon::iter::split((procs, times), |(mut procs, times)| {
+        if let Some((first, rest)) = times.split_first() {
+            // let times2 = rest.clone();
+            let mut procs2 = procs.clone();
+            // if procs.len() == 2 {
+            procs[0] += first;
+            procs2[1] += first;
+            ((procs, rest), Some((procs2, rest)))
+        } else {
+            ((procs, times), None)
+        }
+    })
+    .map(|(mut procs, times)| brute_force_rec(&mut procs, times))
+    .min()
+    .unwrap()
 }
 
 fn brute_force_rec_par(procs: &mut Vec<u64>, times: &[u64], levels: usize) -> u64 {
@@ -410,10 +433,10 @@ pub fn branch_and_bound_rec_fallback(
     }
 }
 
-fn _compute_lower_bound(times: &[u64], times_sum: u64, P: usize) -> u64 {
+fn _compute_lower_bound(times: &[u64], times_sum: u64, p: usize) -> u64 {
     debug_assert_eq!(times.iter().sum::<u64>(), times_sum);
     std::cmp::max(
         times.iter().max().cloned().unwrap_or(0),
-        times_sum / P as u64,
+        times_sum / p as u64,
     )
 }
