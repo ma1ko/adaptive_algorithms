@@ -9,6 +9,32 @@ lazy_static! {
         .map(|_| CachePadded::new(AtomicUsize::new(0)))
         .collect();
 }
+#[cfg(feature = "statistics")]
+use std::cell::RefCell;
+thread_local! {
+#[cfg(feature = "statistics")]
+    pub static LAST_VICTIM: RefCell<usize>= RefCell::new(0);
+}
+pub fn logging_steal(backoffs: usize, victim: usize) -> Option<()> {
+    #[cfg(feature = "statistics")]
+    LAST_VICTIM.with(|v| {
+        *v.borrow_mut() = victim;
+    });
+    let thread_index = rayon::current_thread_index().unwrap();
+    let thread_index = 1 << thread_index;
+    V[victim].fetch_or(thread_index, Ordering::Relaxed);
+    let backoff = Backoff::new();
+    let mut c: usize;
+    for _ in 0..backoffs {
+        backoff.spin(); // spin or snooze()?
+        c = V[victim].load(Ordering::Relaxed);
+        if c == 0 {
+            return Some(());
+        }
+    }
+    V[victim].fetch_and(!thread_index, Ordering::Relaxed);
+    None
+}
 
 pub fn optimized_steal(victim: usize) -> Option<()> {
     let thread_index = rayon::current_thread_index().unwrap();
@@ -24,7 +50,7 @@ pub fn optimized_steal(victim: usize) -> Option<()> {
 
     let backoff = Backoff::new();
     let mut c: usize;
-    for _ in 0..backoffs{
+    for _ in 0..backoffs {
         backoff.spin(); // spin or snooze()?
 
         c = V[victim].load(Ordering::Relaxed);

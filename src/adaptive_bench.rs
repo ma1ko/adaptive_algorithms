@@ -1,4 +1,3 @@
-use rayon;
 
 pub use crate::steal;
 

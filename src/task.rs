@@ -27,6 +27,24 @@ impl Task for Dummy {
         assert!(false);
     }
 }
+
+#[cfg(feature = "statistics")]
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+#[cfg(feature = "statistics")]
+lazy_static! {
+    pub static ref SUCCESSFUL_STEALS: AtomicUsize = AtomicUsize::new(0);
+    pub static ref TOTAL_STEAL_COUNTER: AtomicUsize = AtomicUsize::new(0);
+}
+
+#[cfg(feature = "statistics")]
+pub fn print_statistics() {
+    let steals = SUCCESSFUL_STEALS.load(Relaxed);
+    let total = TOTAL_STEAL_COUNTER.load(Relaxed);
+    println!("Successful Steals: {}", steals);
+    println!("Steal Counter: {}", total);
+    println!("Average Steal Counter: {}", total as f64 / steals as f64);
+}
+
 pub trait Task: Send + Sync + Sized {
     // run self *and* me, or return false if you can't
     fn run_(&mut self) {
@@ -70,31 +88,11 @@ pub trait Task: Send + Sync + Sized {
     }
 
     fn split_run(&mut self, steal_counter: usize, mut f: Option<&mut impl Task>) {
-        // // run the parent task
-        // if let Some(f) = f.take() {
-        //     if f.can_split() {
-        //         f.split(move |left, right| self.runner(left, right));
-        //         return;
-        //     }
-        // }
-        // let runner = |left: &mut Self, right: &mut Self| {
-        //     if steal_counter < 2 || !left.can_split() || !right.can_split() {
-        //         rayon::join(
-        //             || {
-        //                 steal::reset_my_steal_count();
-        //                 left.run(NOTHING)
-        //             },
-        //             || right.run(NOTHING),
-        //         );
-        //         left.fuse(right);
-        //     } else {
-        //         rayon::join(
-        //             || left.split_run(steal_counter / 2, NOTHING),
-        //             || right.split_run(steal_counter / 2, NOTHING),
-        //         );
-        //         left.fuse(right);
-        //     }
-        // };
+        #[cfg(feature = "statistics")]
+        SUCCESSFUL_STEALS.fetch_add(1, Relaxed);
+        #[cfg(feature = "statistics")]
+        TOTAL_STEAL_COUNTER.fetch_add(steal_counter, Relaxed);
+
         let mut f = f.take();
         self.split(move |x| Self::runner(f.take(), x), steal_counter);
     }
@@ -148,6 +146,10 @@ pub trait SimpleTask: Send + Sync {
     }
 
     fn split_run(&mut self, steal_counter: usize) {
+        #[cfg(feature = "statistics")]
+        SUCCESSFUL_STEALS.fetch_add(1, Relaxed);
+        #[cfg(feature = "statistics")]
+        TOTAL_STEAL_COUNTER.fetch_add(steal_counter, Relaxed);
         self.split(Self::runner, steal_counter);
     }
     fn can_split(&self) -> bool;
