@@ -16,7 +16,7 @@ impl Task for Dummy {
         false
     }
 
-    fn split(&mut self, _runner: impl FnMut(Vec<&mut Self>), _steal_counter: usize) {
+    fn split(&mut self, _runner: impl FnMut(&mut Vec<&mut Self>), _steal_counter: usize) {
         assert!(false);
     }
     fn is_finished(&self) -> bool {
@@ -81,25 +81,34 @@ pub trait Task: Send + Sync + Sized {
         left.fuse(&mut right);
         return;
     }
-    fn runner(f: Option<&mut impl Task>, mut tasks: Vec<&mut Self>) {
-        if let Some(f) = f {
-            rayon::join(|| Self::runner(NOTHING, tasks), || f.run_());
-        } else if tasks.len() == 1 {
+    fn runner(tasks: &mut Vec<&mut Self>) {
+        // if let Some(task) = tasks.pop() {
+        if !tasks.is_empty() {
+            let task = tasks.remove(0);
+            rayon::join(|| Self::runner(tasks), || task.run(NOTHING));
+
+            if let Some(other) = tasks.pop() {
+                task.fuse(other);
+            }
+            tasks.push(task);
+        } else {
             steal::reset_my_steal_count();
-            tasks.pop().unwrap().run_();
-        } else if let Some(task) = tasks.pop() {
-            rayon::join(|| Self::runner(NOTHING, tasks), || task.run_());
         }
     }
 
-    fn split_run(&mut self, steal_counter: usize, mut f: Option<&mut impl Task>) {
+    fn split_run(&mut self, steal_counter: usize, f: Option<&mut impl Task>) {
         #[cfg(feature = "statistics")]
         SUCCESSFUL_STEALS.fetch_add(1, Relaxed);
         #[cfg(feature = "statistics")]
         TOTAL_STEAL_COUNTER.fetch_add(steal_counter, Relaxed);
 
-        let mut f = f.take();
-        self.split(move |x| Self::runner(f.take(), x), steal_counter);
+        if let Some(f) = f {
+            if f.can_split() {
+                rayon::join(|| self.run_(), || f.run_());
+                return;
+            }
+        }
+        self.split(Self::runner, steal_counter);
     }
     fn check_(&mut self) {
         self.check(NOTHING);
@@ -113,7 +122,7 @@ pub trait Task: Send + Sync + Sized {
     }
     fn can_split(&self) -> bool;
     fn is_finished(&self) -> bool;
-    fn split(&mut self, runner: impl FnMut(Vec<&mut Self>), steal_counter: usize);
+    fn split(&mut self, runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize);
     fn fuse(&mut self, _other: &mut Self);
 }
 

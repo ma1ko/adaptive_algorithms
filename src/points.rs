@@ -79,7 +79,7 @@ impl<'a> Task for Searcher<'a> {
         return self.end_index - self.start_index > 16;
     }
 
-    fn split(&mut self, mut runner: impl FnMut(Vec<&mut Self>), steal_counter: usize) {
+    fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
         let half = (self.end_index - self.start_index) / 2 + self.start_index;
         let mut other: Searcher<'a> = Searcher {
             points: self.points,
@@ -88,7 +88,7 @@ impl<'a> Task for Searcher<'a> {
             min: self.min,
         };
         self.end_index = half;
-        runner(vec![self, &mut other]);
+        runner(&mut vec![self, &mut other]);
     }
 
     fn is_finished(&self) -> bool {
@@ -120,9 +120,10 @@ impl<'a> Task for Tester<'a> {
         self.start_index = end_index;
     }
     fn can_split(&self) -> bool {
+        // true
         self.end_index - self.start_index > 1024
     }
-    fn split(&mut self, mut runner: impl FnMut(Vec<&mut Self>), steal_counter: usize) {
+    fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
         let half = (self.end_index - self.start_index) / 2 + self.start_index;
         let mut other: Tester<'a> = Tester {
             points: self.points,
@@ -132,7 +133,7 @@ impl<'a> Task for Tester<'a> {
             min: self.min,
         };
         self.end_index = half;
-        runner(vec![self,&mut other]);
+        runner(&mut vec![self,&mut other]);
     }
     fn is_finished(&self) -> bool {
         self.end_index == self.start_index
