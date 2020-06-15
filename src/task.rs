@@ -40,9 +40,13 @@ lazy_static! {
 pub fn print_statistics() {
     let steals = SUCCESSFUL_STEALS.load(Relaxed);
     let total = TOTAL_STEAL_COUNTER.load(Relaxed);
+    let successes = steal::STEAL_SUCCESS.load(Relaxed);
+    let fails = steal::STEAL_FAIL.load(Relaxed);
     println!("Successful Steals: {}", steals);
     println!("Steal Counter: {}", total);
     println!("Average Steal Counter: {}", total as f64 / steals as f64);
+    println!("Successes: {}", successes);
+    println!("Fails: {}", fails);
 }
 
 pub trait Task: Send + Sync + Sized {
@@ -80,10 +84,11 @@ pub trait Task: Send + Sync + Sized {
     fn runner(f: Option<&mut impl Task>, mut tasks: Vec<&mut Self>) {
         if let Some(f) = f {
             rayon::join(|| Self::runner(NOTHING, tasks), || f.run_());
+        } else if tasks.len() == 1 {
+            steal::reset_my_steal_count();
+            tasks.pop().unwrap().run_();
         } else if let Some(task) = tasks.pop() {
             rayon::join(|| Self::runner(NOTHING, tasks), || task.run_());
-        } else {
-            steal::reset_my_steal_count();
         }
     }
 

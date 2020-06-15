@@ -1,6 +1,4 @@
 use crossbeam_utils::{Backoff, CachePadded};
-use num_cpus;
-use rayon::current_num_threads;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 lazy_static! {
@@ -10,35 +8,18 @@ lazy_static! {
         .collect();
 }
 #[cfg(feature = "statistics")]
+lazy_static! {
+    pub static ref STEAL_SUCCESS: AtomicUsize = AtomicUsize::new(0);
+    pub static ref STEAL_FAIL: AtomicUsize = AtomicUsize::new(0);
+}
+#[cfg(feature = "statistics")]
 use std::cell::RefCell;
 thread_local! {
 #[cfg(feature = "statistics")]
     pub static LAST_VICTIM: RefCell<usize>= RefCell::new(0);
 }
-pub fn logging_steal(backoffs: usize, victim: usize) -> Option<()> {
-    #[cfg(feature = "statistics")]
-    LAST_VICTIM.with(|v| {
-        *v.borrow_mut() = victim;
-    });
-    let thread_index = rayon::current_thread_index().unwrap();
-    let thread_index = 1 << thread_index;
-    V[victim].fetch_or(thread_index, Ordering::Relaxed);
-    let backoff = Backoff::new();
-    let mut c: usize;
-    for _ in 0..backoffs {
-        backoff.spin(); // spin or snooze()?
-        c = V[victim].load(Ordering::Relaxed);
-        if c == 0 {
-            return Some(());
-        }
-    }
-    V[victim].fetch_and(!thread_index, Ordering::Relaxed);
-    None
-}
 
 pub fn optimized_steal(victim: usize) -> Option<()> {
-    let thread_index = rayon::current_thread_index().unwrap();
-    let thread_index = 1 << thread_index;
     let num_threads = rayon::current_num_threads();
     let backoffs = match num_threads {
         1 => panic!("Can't steal from myself"), // What are we even doing here?
@@ -46,27 +27,27 @@ pub fn optimized_steal(victim: usize) -> Option<()> {
         9..=12 => 4,
         _ => 1,
     };
-    V[victim].fetch_or(thread_index, Ordering::Relaxed);
-
-    let backoff = Backoff::new();
-    let mut c: usize;
-    for _ in 0..backoffs {
-        backoff.spin(); // spin or snooze()?
-
-        c = V[victim].load(Ordering::Relaxed);
-        if c == 0 {
-            return Some(());
-        }
-    }
-    V[victim].fetch_and(!thread_index, Ordering::Relaxed);
-    None
+    steal(backoffs, victim)
 }
 
-pub fn steal(backoffs: usize, victim: usize) -> Option<()> {
+pub fn steal(mut backoffs: usize, victim: usize) -> Option<()> {
+    #[cfg(feature = "statistics")]
+    LAST_VICTIM.with(|v| {
+        *v.borrow_mut() = victim;
+    });
     let thread_index = rayon::current_thread_index().unwrap();
     let thread_index = 1 << thread_index;
     V[victim].fetch_or(thread_index, Ordering::Relaxed);
-    //V[victim].fetch_add(1, Ordering::Relaxed);
+
+    if backoffs == 0 {
+        let num_threads = rayon::current_num_threads();
+        backoffs = match num_threads {
+            1 => panic!("Can't steal from myself"), // What are we even doing here?
+            2..=8 => 6,
+            9..=12 => 4,
+            _ => 1,
+        };
+    }
 
     let backoff = Backoff::new();
     let mut c: usize;
@@ -76,14 +57,17 @@ pub fn steal(backoffs: usize, victim: usize) -> Option<()> {
         // wait until the victim has taken the value, check regularly
         c = V[victim].load(Ordering::Relaxed);
         if c == 0 {
+            #[cfg(feature = "statistics")]
+            STEAL_SUCCESS.fetch_add(1, Ordering::Relaxed);
+
             return Some(());
         }
     }
 
     V[victim].fetch_and(!thread_index, Ordering::Relaxed);
-    //let i = V[victim].fetch_sub(1, Ordering::Relaxed);
 
-    //let _ = V[victim].compare_exchange_weak(c, c - 1, Ordering::Relaxed, Ordering::Relaxed);
+    #[cfg(feature = "statistics")]
+    STEAL_FAIL.fetch_add(1, Ordering::Relaxed);
 
     None
 }
