@@ -151,6 +151,9 @@ impl SimpleTask for Scheduling {
     fn is_finished(&self) -> bool {
         self.decisions.is_empty()
     }
+    fn work(&self) -> Option<(&'static str, usize)> {
+        Some(("Scheduling", self.procs.len().pow(self.remaining_times.len() as u32)))
+    }
 }
 
 #[test]

@@ -76,7 +76,7 @@ impl<'a> Task for Searcher<'a> {
         self.start_index = (self.start_index + 1).min(self.end_index);
     }
     fn can_split(&self) -> bool {
-        return self.end_index - self.start_index > 16;
+        return self.end_index - self.start_index > 1;
     }
 
     fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
@@ -97,6 +97,10 @@ impl<'a> Task for Searcher<'a> {
     }
     fn fuse(&mut self, other: &mut Self) {
         self.min = self.min.min(other.min);
+    }
+    fn work(&self) -> Option<(&'static str, usize)> {
+        Some(("First Level", self.end_index - self.start_index))
+        
     }
 }
 struct Tester<'a> {
@@ -121,7 +125,7 @@ impl<'a> Task for Tester<'a> {
     }
     fn can_split(&self) -> bool {
         // true
-        self.end_index - self.start_index > 1024
+        self.end_index - self.start_index > 32000
     }
     fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
         let half = (self.end_index - self.start_index) / 2 + self.start_index;
@@ -141,6 +145,10 @@ impl<'a> Task for Tester<'a> {
     fn fuse(&mut self, other: &mut Self) {
         self.min = self.min.min(other.min);
     }
+    // We can't do a subtask here, it'll just be too much for rayon_logs to handle
+    // fn work(&self) -> Option<(&'static str, usize)> {
+    //     Some(("Second Level", self.start_index - self.end_index))
+    // }
 }
 
 pub struct RayonPoints<'a> {

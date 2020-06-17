@@ -55,13 +55,21 @@ pub trait Task: Send + Sync + Sized {
         self.run(NOTHING)
     }
     fn run(&mut self, mut f: Option<&mut impl Task>) {
-        while !self.is_finished() {
-            let steal_counter = steal::get_my_steal_count();
-            if steal_counter != 0 && self.can_split() {
-                self.split_run(steal_counter, f.take());
-                continue;
+        let work = self.work();
+        let mut run_loop = || {
+            while !self.is_finished() {
+                let steal_counter = steal::get_my_steal_count();
+                if steal_counter != 0 && self.can_split() {
+                    self.split_run(steal_counter, f.take());
+                    continue;
+                }
+                self.step();
             }
-            self.step();
+        };
+        if let Some((work_type, work_amount)) = work {
+            rayon::subgraph(work_type, work_amount, || run_loop())
+        } else {
+            run_loop()
         }
     }
     fn step(&mut self);
@@ -69,30 +77,28 @@ pub trait Task: Send + Sync + Sized {
         self.split_run(1, NOTHING)
     }
 
-    fn _runner<T: Task>(&mut self, left: &mut T, mut right: &mut T) {
-        rayon::join(
-            || {
-                steal::reset_my_steal_count();
-                self.run_();
-                left.run_()
-            },
-            || right.run_(),
-        );
-        left.fuse(&mut right);
-        return;
-    }
+    // Both Task and SimpleTask runner have the (almost) same implementation, we can do sth maybe?
     fn runner(tasks: &mut Vec<&mut Self>) {
-        // if let Some(task) = tasks.pop() {
-        if !tasks.is_empty() {
+        if tasks.len() > 1 {
+            // get the first task (take from the front so we can fuse correctly in the end
             let task = tasks.remove(0);
-            rayon::join(|| Self::runner(tasks), || task.run(NOTHING));
+            // run it
+            rayon::join(|| Self::runner(tasks), || task.run_());
 
+            // Finished doing all tasks, we need to fuse here
+            // Grab the successor from the vector and fuse
             if let Some(other) = tasks.pop() {
                 task.fuse(other);
             }
+            // Push ourselves on the queue so the predecessor can fuse
             tasks.push(task);
         } else {
+            // last task, reset counter so stealers know they can steal now
             steal::reset_my_steal_count();
+            // just run the last task if it exists
+            if let Some(task) = tasks.first_mut() {
+                task.run_();
+            }
         }
     }
 
@@ -121,6 +127,9 @@ pub trait Task: Send + Sync + Sized {
         }
     }
     fn can_split(&self) -> bool;
+    fn work(&self) -> Option<(&'static str, usize)> {
+        None
+    }
     fn is_finished(&self) -> bool;
     fn split(&mut self, runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize);
     fn fuse(&mut self, _other: &mut Self);
@@ -128,13 +137,21 @@ pub trait Task: Send + Sync + Sized {
 
 pub trait SimpleTask: Send + Sync {
     fn run(&mut self) {
-        while !self.is_finished() {
-            let steal_counter = steal::get_my_steal_count();
-            if steal_counter != 0 && self.can_split() {
-                self.split_run(steal_counter);
-                continue;
+        let work = self.work();
+        let mut run_loop = || {
+            while !self.is_finished() {
+                let steal_counter = steal::get_my_steal_count();
+                if steal_counter != 0 && self.can_split() {
+                    self.split_run(steal_counter);
+                    continue;
+                }
+                self.step();
             }
-            self.step();
+        };
+        if let Some((work_type, work_amount)) = work {
+            rayon::subgraph(work_type, work_amount, || run_loop())
+        } else {
+            run_loop()
         }
     }
     fn step(&mut self);
@@ -145,17 +162,26 @@ pub trait SimpleTask: Send + Sync {
         }
     }
     fn runner(tasks: &mut Vec<&mut Self>) {
-        // if let Some(task) = tasks.pop() {
-        if !tasks.is_empty() {
+        if tasks.len() > 1 {
+            // get the first task (take from the front so we can fuse correctly in the end
             let task = tasks.remove(0);
+            // run it
             rayon::join(|| Self::runner(tasks), || task.run());
 
+            // Finished doing all tasks, we need to fuse here
+            // Grab the successor from the vector and fuse
             if let Some(other) = tasks.pop() {
                 task.fuse(other);
             }
+            // Push ourselves on the queue so the predecessor can fuse
             tasks.push(task);
         } else {
+            // last task, reset counter so stealers know they can steal now
             steal::reset_my_steal_count();
+            // just run the last task if it exists
+            if let Some(task) = tasks.first_mut() {
+                task.run();
+            }
         }
     }
 
@@ -168,6 +194,9 @@ pub trait SimpleTask: Send + Sync {
     }
     fn can_split(&self) -> bool;
     fn is_finished(&self) -> bool;
+    fn work(&self) -> Option<(&'static str, usize)> {
+        None
+    }
     fn split(&mut self, runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize);
     fn fuse(&mut self, _other: &mut Self);
 }
