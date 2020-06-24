@@ -49,7 +49,7 @@ pub fn print_statistics() {
     println!("Fails: {}", fails);
 }
 
-pub trait Task: Send + Sync + Sized {
+pub trait Task: Send + Sized {
     // run self *and* me, or return false if you can't
     fn run_(&mut self) {
         self.run(NOTHING)
