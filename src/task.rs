@@ -135,7 +135,7 @@ pub trait Task: Send + Sized {
     fn fuse(&mut self, _other: &mut Self);
 }
 
-pub trait SimpleTask: Send + Sync {
+pub trait SimpleTask: Send {
     fn run(&mut self) {
         let work = self.work();
         let mut run_loop = || {
