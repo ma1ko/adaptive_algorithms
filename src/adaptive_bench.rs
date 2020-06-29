@@ -1,16 +1,11 @@
-
 pub use crate::steal;
 
+use num::Num;
+
 pub trait Benchable<'a, R>: Send + Sync {
-    fn start(&mut self); // run the test
+    fn start(&mut self) -> Option<R>; // run the test
     fn name(&self) -> &'static str; // give it a nice name
                                     // fn id(&self) -> BenchmarkId; // not required, we create one directly
-    fn verify(&self, _result: &R) -> bool {
-        true
-    } // if you want to verify for correctness
-    fn get_result(&self) -> R {
-        unimplemented!() // If you don't want to check for the result
-    }
     fn get_thread_pool(&self, num_threads: usize, backoffs: Option<usize>) -> rayon::ThreadPool {
         let mut pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads);
         if let Some(backoffs) = backoffs {
@@ -23,24 +18,23 @@ pub trait Benchable<'a, R>: Send + Sync {
         pool.build().unwrap()
     }
     // reset the test, will get called after every test so we can reuse it.
-    fn reset(&mut self);
 }
 
 use criterion::BenchmarkGroup;
 use criterion::*;
 type Group<'a> = BenchmarkGroup<'a, criterion::measurement::WallTime>;
-pub struct Tester<'a, R> {
+pub struct Tester<'a, R>
+where
+    R: Num,
+{
     result: Option<R>,
     tests: Vec<TestConfig<'a, R>>,
     group: Group<'a>,
 }
 impl<'a, R> Tester<'a, R>
 where
-    R: std::fmt::Debug,
+    R: Num + Send,
 {
-    pub fn verify(result: &R, test: Box<dyn Benchable<R> + 'a>) {
-        assert!(test.verify(result))
-    }
     pub fn new(tests: Vec<TestConfig<'a, R>>, group: Group<'a>, result: Option<R>) -> Self {
         Tester {
             result,
@@ -60,11 +54,12 @@ where
                     b.iter_batched(
                         || (),
                         |_| {
-                            test.test.reset();
-                            pool.install(|| test.test.start());
+                            let res = pool.install(|| test.test.start());
                             // Optional verification
                             if let Some(result) = result {
-                                assert!(test.test.verify(result));
+                                if let Some(res) = res {
+                                    assert!(res == *result);
+                                }
                             }
                         },
                         BatchSize::SmallInput,
@@ -75,24 +70,30 @@ where
     }
 }
 
-pub struct TestConfig<'a, R> {
+pub struct TestConfig<'a, R>
+where
+    R: Num,
+{
     pub len: usize,
     pub num_cpus: usize,
     pub backoff: Option<usize>,
     pub test: Box<dyn Benchable<'a, R> + 'a>,
 }
-impl<'a, R> TestConfig<'a, R> {
+impl<'a, R> TestConfig<'a, R>
+where
+    R: Num,
+{
     pub fn new(
         len: usize,
         num_cpus: usize,
         backoff: Option<usize>,
-        test: Box<dyn Benchable<'a, R> + 'a>,
+        test: impl Benchable<'a, R> + 'a,
     ) -> TestConfig<'a, R> {
         TestConfig {
             len,
             num_cpus,
             backoff,
-            test,
+            test: Box::new(test),
         }
     }
     pub fn get_thread_pool(&self) -> rayon::ThreadPool {

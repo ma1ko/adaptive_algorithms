@@ -18,11 +18,13 @@ num_cpus = "*"
 rayon_logs = { git = "https://github.com/ma1ko/rayon-logs", optional = true}
 lazy_static = "*"
 crossbeam-utils = "*"
+num = "*"
 
 
 [features]
 logs = ["rayon_logs"]
 statistics = []
+multisplit = []
 
 [profile.bench]
 debug = true
@@ -31,7 +33,7 @@ debug = true
 debug = true
 
 [[bench]]
-name = "bench"
+name = "points"
 harness = false
 
 [[bench]]

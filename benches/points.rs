@@ -38,8 +38,7 @@ fn bench(c: &mut Criterion) {
         test.push(t);
     }
     let mut r = RayonPoints::new(&data);
-    r.start();
-    let mut t = Tester::new(test, group, Some(r.get_result()));
+    let mut t = Tester::new(test, group, r.start());
     t.run();
 
     // group.finish();

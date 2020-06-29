@@ -3,7 +3,6 @@ use adaptive_algorithms::scheduling::*;
 use criterion::*;
 extern crate rand;
 
-
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("Scheduling");
     group.warm_up_time(std::time::Duration::new(1, 0));
@@ -17,7 +16,7 @@ fn bench(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let n = 22; 
+    let n = 22;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(n)
         .collect();
@@ -25,39 +24,25 @@ fn bench(c: &mut Criterion) {
     let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
     let mut test: Vec<TestConfig<u64>> = vec![];
     // Baseline (single-core)
-    let t = TestConfig {
-        len: times.len(),
-        num_cpus: 1,
-        backoff: None,
-        test: Box::new(BruteForce::new(times.clone(), procs.clone())),
-    };
+    let bf = BruteForce::new(times.clone(), procs.clone());
+    let t = TestConfig::new(times.len(), 1, None, bf);
     test.push(t);
     for i in &cpus {
-        for s in vec![0,6, 8] {
-            let t = TestConfig {
-                len: times.len(),
-                num_cpus: *i,
-                backoff: Some(s),
-                test: Box::new(Scheduling::new(
-                    &times,
-                    &procs,
-                )),
-            };
+        for s in vec![0, 6, 8] {
+            let t = TestConfig::new(times.len(), *i, Some(s), Scheduling::new(&times, &procs));
             test.push(t);
         }
-        let t = TestConfig {
-            len: times.len(),
-            num_cpus: *i,
-            backoff: None,
-            test: Box::new(BruteForcePar::new(times.clone(), procs.clone())),
-        };
+        let t = TestConfig::new(
+            times.len(),
+            *i,
+            None,
+            BruteForcePar::new(times.clone(), procs.clone())
+        );
         test.push(t);
     }
 
     let mut b = BruteForce::new(times.clone(), procs.clone());
-    b.start();
-
-    let mut t = Tester::new(test, group, Some(b.get_result()));
+    let mut t = Tester::new(test, group, b.start());
     t.run();
 
     // group.finish();

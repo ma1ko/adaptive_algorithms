@@ -44,20 +44,13 @@ impl<'a> Searcher<'a> {
 }
 
 impl<'a> Benchable<'a, f64> for Searcher<'a> {
-    fn start(&mut self) {
-        self.run_();
+    fn start(&mut self) -> Option<f64> {
+        *self = Searcher::new(&self.points);
+        self.run();
+        Some(self.min)
     }
     fn name(&self) -> &'static str {
         "Adaptive Nearest Points Search"
-    }
-    fn verify(&self, result: &f64) -> bool {
-        *result == self.min
-    }
-    fn get_result(&self) -> f64 {
-        self.min
-    }
-    fn reset(&mut self) {
-        *self = Searcher::new(&self.points);
     }
 }
 
@@ -71,24 +64,35 @@ impl<'a> Task for Searcher<'a> {
             point: &self.points[self.start_index],
         };
 
-        t.run(Some(self));
+        t.run_with(Some(self));
         self.min = self.min.min(t.min);
         self.start_index = (self.start_index + 1).min(self.end_index);
     }
     fn can_split(&self) -> bool {
         return self.end_index - self.start_index > 1;
     }
-
     fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
-        let half = (self.end_index - self.start_index) / 2 + self.start_index;
-        let mut other: Searcher<'a> = Searcher {
-            points: self.points,
-            start_index: half,
-            end_index: self.end_index,
-            min: self.min,
-        };
-        self.end_index = half;
-        runner(&mut vec![self, &mut other]);
+        // let half = (self.end_index - self.start_index) / 2 + self.start_index;
+        let mut start_index = self.start_index;
+        let end_index = self.end_index;
+        // how many elements per task? We need at least one
+        let step = (end_index - start_index) / (steal_counter + 1) + 1;
+        let mut tasks = vec![];
+        self.end_index = start_index + step;
+        start_index += step;
+        while start_index < end_index {
+            let other: Searcher<'a> = Searcher {
+                points: self.points,
+                start_index,
+                end_index: (start_index + step).min(end_index),
+                min: self.min,
+            };
+            tasks.push(other);
+            start_index += step;
+        }
+        let mut tasks = tasks.iter_mut().collect::<Vec<&mut Self>>();
+        tasks.insert(0, self);
+        runner(&mut tasks);
     }
 
     fn is_finished(&self) -> bool {
@@ -100,7 +104,6 @@ impl<'a> Task for Searcher<'a> {
     }
     fn work(&self) -> Option<(&'static str, usize)> {
         Some(("First Level", self.end_index - self.start_index))
-        
     }
 }
 struct Tester<'a> {
@@ -124,10 +127,11 @@ impl<'a> Task for Tester<'a> {
         self.start_index = end_index;
     }
     fn can_split(&self) -> bool {
-        // true
-        self.end_index - self.start_index > 32000
+        true
+        // self.end_index - self.start_index > 32000
+        // false
     }
-    fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), steal_counter: usize) {
+    fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), _steal_counter: usize) {
         let half = (self.end_index - self.start_index) / 2 + self.start_index;
         let mut other: Tester<'a> = Tester {
             points: self.points,
@@ -137,7 +141,7 @@ impl<'a> Task for Tester<'a> {
             min: self.min,
         };
         self.end_index = half;
-        runner(&mut vec![self,&mut other]);
+        runner(&mut vec![self, &mut other]);
     }
     fn is_finished(&self) -> bool {
         self.end_index == self.start_index
@@ -153,17 +157,16 @@ impl<'a> Task for Tester<'a> {
 
 pub struct RayonPoints<'a> {
     points: &'a [Point],
-    min: f64,
 }
 impl<'a> RayonPoints<'a> {
     pub fn new(points: &'a [Point]) -> Self {
-        RayonPoints { points, min: 100.0 }
+        RayonPoints { points }
     }
 }
 use rayon::prelude::*;
 
 impl<'a> Benchable<'a, f64> for RayonPoints<'a> {
-    fn start(&mut self) {
+    fn start(&mut self) -> Option<f64> {
         let iter = self
             .points
             .par_iter()
@@ -173,19 +176,9 @@ impl<'a> Benchable<'a, f64> for RayonPoints<'a> {
                 inner_iter.fold(1.0f64, |x, y| x.min(y))
             })
             .collect::<Vec<f64>>();
-        let min = iter.iter().fold(1.0f64, |x, y| x.min(*y));
-        self.min = min
-    }
-    fn verify(&self, result: &f64) -> bool {
-        self.min == *result
+        Some(iter.iter().fold(1.0f64, |x, y| x.min(*y)))
     }
     fn name(&self) -> &'static str {
         "Nearest Points Rayon"
-    }
-    fn get_result(&self) -> f64 {
-        self.min
-    }
-    fn reset(&mut self) {
-        self.min = 100.0;
     }
 }

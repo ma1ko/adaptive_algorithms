@@ -37,7 +37,7 @@ impl Scheduling {
         s.procs[0] += s.remaining_times[0];
         s
     }
-    fn print(&mut self) {
+    fn _debug(&mut self) {
         println!("-----------");
         println!("Times     : {:?}", self.remaining_times);
         println!("Decisions : {:?}", self.decisions);
@@ -78,7 +78,7 @@ impl Scheduling {
         other
     }
 }
-impl SimpleTask for Scheduling {
+impl Task for Scheduling {
     fn step(&mut self) {
         // self.print();
         // println!("Depth: {}, decisions: {:?}", self.index, self.decisions);
@@ -90,7 +90,6 @@ impl SimpleTask for Scheduling {
                 &mut self.remaining_times[self.decisions.len()..],
             ));
             // });
-            // println!("{}", self.best);
             self.next();
             return;
         }
@@ -135,14 +134,8 @@ impl SimpleTask for Scheduling {
             assert!(false, "Couldn't split");
             return;
         }
-        // assert!(self.decisions != other.decisions); // we should have a different choice somewhere
-
-        // println!("Actually split");
         let mut splits = splits.iter_mut().collect::<Vec<&mut Self>>();
         splits.insert(0, self);
-        // if splits.len() >= 3 {
-        //     println!("New Trees: {:?} ", splits);
-        // }
         runner(&mut splits);
     }
     fn fuse(&mut self, other: &mut Self) {
@@ -165,36 +158,27 @@ fn test_scheduling() {
     let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
 
     let mut s = Scheduling::new(&times, &procs);
-    s.start();
+    let my_result = s.start();
     let pool = get_thread_pool();
     let mut s = Scheduling::new(&times, &procs);
     pool.install(|| s.start());
     // s.start();
     let mut b = BruteForcePar::new(times.clone(), procs.clone());
-    b.start();
-    assert_eq!(s.get_result(), b.get_result());
-    s.verify(&b.get_result());
+    let other_result = b.start();
+    assert_eq!(my_result, other_result);
+    // s.verify(&b.get_result());
 }
 
 use crate::adaptive_bench::Benchable;
 impl<'a> Benchable<'a, u64> for Scheduling {
-    fn start(&mut self) -> () {
-        self.run()
+    fn start(&mut self) -> Option<u64> {
+        self.procs.iter_mut().for_each(|p| *p = 0);
+        *self = Self::new(&self.remaining_times, &self.procs);
+        self.run();
+        Some(self.best)
     }
     fn name(&self) -> &'static str {
         "Adaptive_Scheduling"
-    }
-    fn get_result(&self) -> u64 {
-        self.best
-    }
-    fn reset(&mut self) {
-        self.procs.iter_mut().for_each(|p| *p = 0);
-        *self = Self::new(&self.remaining_times, &self.procs);
-        // self.best = std::u64::MAX;
-    }
-    fn verify(&self, result: &u64) -> bool {
-        assert_eq!(*result, self.best);
-        true
     }
 }
 
@@ -230,31 +214,16 @@ impl<'a> Benchable<'a, u64> for BruteForce {
     fn name(&self) -> &'static str {
         "Brute Force Single"
     }
-    fn get_result(&self) -> u64 {
-        self.result
-    }
-    fn start(&mut self) -> () {
-        self.result = brute_force(&self.times, self.procs.clone())
-    }
-    fn reset(&mut self) {
-        self.result = std::u64::MAX;
+    fn start(&mut self) -> Option<u64> {
+        Some(brute_force(&self.times, self.procs.clone()))
     }
 }
 impl<'a> Benchable<'a, u64> for BruteForcePar {
     fn name(&self) -> &'static str {
         "Brute Force Parallel"
     }
-    fn get_result(&self) -> u64 {
-        self.result
-    }
-    fn start(&mut self) -> () {
-        self.result = brute_force_par(&self.times, self.procs.clone())
-    }
-    fn reset(&mut self) {
-        self.result = std::u64::MAX;
-    }
-    fn verify(&self, result: &u64) -> bool {
-        *result == self.result
+    fn start(&mut self) -> Option<u64> {
+        Some(brute_force_par(&self.times, self.procs.clone()))
     }
 }
 

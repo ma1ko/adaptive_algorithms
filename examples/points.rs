@@ -2,8 +2,8 @@ use adaptive_algorithms::points::*;
 use adaptive_algorithms::rayon::*;
 
 fn main() {
-    let points = Point::create_random_points(1000000);
-    let pool = get_custom_thread_pool(4, 10);
+    let points = Point::create_random_points(50000);
+    let pool = get_thread_pool();
 
     let mut s = Searcher::new(&points);
 
