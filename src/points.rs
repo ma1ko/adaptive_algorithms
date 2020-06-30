@@ -127,8 +127,7 @@ impl<'a> Task for Tester<'a> {
         self.start_index = end_index;
     }
     fn can_split(&self) -> bool {
-        true
-        // self.end_index - self.start_index > 32000
+        self.end_index - self.start_index > 10000
         // false
     }
     fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), _steal_counter: usize) {
