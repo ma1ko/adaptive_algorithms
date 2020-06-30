@@ -103,7 +103,7 @@ pub trait Task: Sized + Send {
         let mut run_loop = || {
             while !self.is_finished() {
                 let steal_counter = steal::get_my_steal_count();
-                if steal_counter != 0 && self.can_split() {
+                if steal_counter != 0 && (f.as_ref().map_or(false, |x| x.can_split()) || self.can_split()) {
                     self.split_run_with(steal_counter, f.take());
                     continue;
                 }
