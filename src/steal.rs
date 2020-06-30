@@ -27,7 +27,8 @@ pub fn optimized_steal(victim: usize) -> Option<()> {
         1 => panic!("Can't steal from myself"), // What are we even doing here?
         2..=4 => 8,
         4..=8 => 4,
-        _ => 2,
+        9..=16 => 2,
+        _ => 1,
     };
     steal(backoffs, victim)
 }

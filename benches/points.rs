@@ -21,20 +21,10 @@ fn bench(c: &mut Criterion) {
     let mut test: Vec<TestConfig<f64>> = vec![];
     for i in &cpus {
         for s in vec![0, 6, 8] {
-            let t = TestConfig {
-                len: data.len(),
-                num_cpus: *i,
-                backoff: Some(s),
-                test: Box::new(Searcher::new(&data)),
-            };
+            let t = TestConfig::new(data.len(), *i, Some(s), Searcher::new(&data));
             test.push(t);
         }
-        let t = TestConfig {
-            len: data.len(),
-            num_cpus: *i,
-            backoff: None,
-            test: Box::new(RayonPoints::new(&data)),
-        };
+        let t = TestConfig::new(data.len(), *i, None, RayonPoints::new(&data));
         test.push(t);
     }
     let mut r = RayonPoints::new(&data);
