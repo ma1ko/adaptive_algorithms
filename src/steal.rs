@@ -22,10 +22,12 @@ thread_local! {
 pub fn optimized_steal(victim: usize) -> Option<()> {
     let num_threads = rayon::current_num_threads();
     let backoffs = match num_threads {
+        // the more threads we have the less we should wait trying to steal. Numbers are purely
+        // experimental and might not be optimal for many cases
         1 => panic!("Can't steal from myself"), // What are we even doing here?
-        2..=8 => 6,
-        9..=12 => 4,
-        _ => 1,
+        2..=4 => 8,
+        4..=8 => 4,
+        _ => 2,
     };
     steal(backoffs, victim)
 }
