@@ -9,13 +9,13 @@ fn main() {
 
     #[cfg(feature = "logs")]
     {
-        let (_, log) = pool.logging_install(|| s.run_());
+        let (_, log) = pool.logging_install(|| s.run());
         log.save_svg("log.svg").unwrap();
     }
 
     #[cfg(not(feature = "logs"))]
     {
-        pool.install(|| s.run_());
+        pool.install(|| s.run());
     }
     #[cfg(feature = "statistics")]
     adaptive_algorithms::task::print_statistics();

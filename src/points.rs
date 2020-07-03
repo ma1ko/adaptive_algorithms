@@ -64,7 +64,7 @@ impl<'a> Task for Searcher<'a> {
             point: &self.points[self.start_index],
         };
 
-        t.run_with(Some(self));
+        t.run_with(self);
         self.min = self.min.min(t.min);
         self.start_index = (self.start_index + 1).min(self.end_index);
     }

@@ -96,15 +96,30 @@ pub trait Task: Sized + Send {
         }
     }
     fn run(&mut self) {
-        self.run_with(NOTHING)
-    }
-    fn run_with(&mut self, mut f: Option<&mut impl Task>) {
         let work = self.work();
         let mut run_loop = || {
             while !self.is_finished() {
                 let steal_counter = steal::get_my_steal_count();
-                if steal_counter != 0 && (f.as_ref().map_or(false, |x| x.can_split()) || self.can_split()) {
-                    self.split_run_with(steal_counter, f.take());
+                if steal_counter != 0 && self.can_split() {
+                    self.split_run(steal_counter);
+                    continue;
+                }
+                self.step();
+            }
+        };
+        if let Some((work_type, work_amount)) = work {
+            rayon::subgraph(work_type, work_amount, || run_loop())
+        } else {
+            run_loop()
+        }
+    }
+    fn run_with(&mut self, f: &mut impl Task) {
+        let work = self.work();
+        let mut run_loop = || {
+            while !self.is_finished() {
+                let steal_counter = steal::get_my_steal_count();
+                if steal_counter != 0 && (f.can_split() || self.can_split()) {
+                    self.split_run_with(steal_counter, f);
                     continue;
                 }
                 self.step();
@@ -117,13 +132,11 @@ pub trait Task: Sized + Send {
         }
     }
     fn step(&mut self);
-    fn split_run_with(&mut self, steal_counter: usize, f: Option<&mut impl Task>) {
-        if let Some(f) = f {
-            if f.can_split() {
-                f.split(|x| Self::runner_with(self, x), 1);
+    fn split_run_with(&mut self, steal_counter: usize, f: &mut impl Task) {
+        if f.can_split() {
+            f.split(|x| Self::runner_with(self, x), 1);
 
-                return;
-            }
+            return;
         }
         self.split_run(steal_counter);
     }
@@ -139,16 +152,7 @@ pub trait Task: Sized + Send {
         #[cfg(not(feature = "multisplit"))]
         self.split(Self::runner, 1);
     }
-    fn check_(&mut self) {
-        self.check(NOTHING);
-    }
 
-    fn check(&mut self, mut f: Option<&mut impl Task>) {
-        let steal_counter = steal::get_my_steal_count();
-        if steal_counter != 0 && self.can_split() {
-            self.split_run_with(steal_counter, f.take());
-        }
-    }
     fn can_split(&self) -> bool;
     fn work(&self) -> Option<(&'static str, usize)> {
         None
