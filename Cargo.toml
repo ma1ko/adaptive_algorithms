@@ -10,11 +10,12 @@ bench = false
 
 [dependencies]
 rayon = {git = "https://github.com/ma1ko/rayon"}
-# mergesort = {git = "https://github.com/ma1ko/mergesort"}
+#rayon = {path= "../rayon"}
 rand = "*"
 criterion = {git = "https://github.com/ma1ko/criterion.rs"}
 #criterion = {path = "../criterion.rs"}
 num_cpus = "*"
+#rayon_logs = { path = "../rayon-logs", optional = true}
 rayon_logs = { git = "https://github.com/ma1ko/rayon-logs", optional = true}
 lazy_static = "*"
 crossbeam-utils = "*"
@@ -22,6 +23,7 @@ num = "*"
 
 
 [features]
+default = ["multisplit"]
 logs = ["rayon_logs"]
 statistics = []
 multisplit = []

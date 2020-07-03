@@ -187,30 +187,20 @@ impl<'a> Benchable<'a, u64> for Scheduling {
 
 pub struct BruteForcePar {
     times: Vec<u64>,
-    result: u64,
     procs: Vec<u64>,
 }
 impl BruteForcePar {
     pub fn new(times: Vec<u64>, procs: Vec<u64>) -> Self {
-        BruteForcePar {
-            times,
-            result: std::u64::MAX,
-            procs,
-        }
+        BruteForcePar { times, procs }
     }
 }
 pub struct BruteForce {
     times: Vec<u64>,
-    result: u64,
     procs: Vec<u64>,
 }
 impl BruteForce {
     pub fn new(times: Vec<u64>, procs: Vec<u64>) -> Self {
-        BruteForce {
-            times,
-            result: std::u64::MAX,
-            procs,
-        }
+        BruteForce { times, procs }
     }
 }
 impl<'a> Benchable<'a, u64> for BruteForce {

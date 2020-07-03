@@ -1,5 +1,4 @@
 extern crate rand;
-use std::time::Instant;
 
 // use rayon::prelude::*;
 pub mod adaptive_bench;
