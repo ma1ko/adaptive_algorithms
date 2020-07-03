@@ -1,33 +1,6 @@
 use crate::rayon;
 use crate::steal;
 
-// if you can't use None because of typing errors, use Nothing
-pub struct Dummy;
-pub const NOTHING: Option<&mut Dummy> = None;
-
-impl Task for Dummy {
-    fn run(&mut self) {
-        assert!(false);
-    }
-    fn step(&mut self) {
-        assert!(false);
-    }
-    fn can_split(&self) -> bool {
-        assert!(false);
-        false
-    }
-    fn split(&mut self, _runner: impl FnMut(&mut Vec<&mut Self>), _steal_counter: usize) {
-        assert!(false);
-    }
-    fn is_finished(&self) -> bool {
-        assert!(false);
-        true
-    }
-    fn fuse(&mut self, _other: &mut Self) {
-        assert!(false);
-    }
-}
-
 #[cfg(feature = "statistics")]
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 #[cfg(feature = "statistics")]
