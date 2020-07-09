@@ -33,7 +33,7 @@ where
 }
 impl<'a, R> Tester<'a, R>
 where
-    R: Num + Send,
+    R: Num + Send + std::fmt::Debug,
 {
     pub fn new(tests: Vec<TestConfig<'a, R>>, group: Group<'a>, result: Option<R>) -> Self {
         Tester {
@@ -58,7 +58,7 @@ where
                             // Optional verification
                             if let Some(result) = result {
                                 if let Some(res) = res {
-                                    assert!(res == *result);
+                                    assert_eq!(res, *result);
                                 }
                             }
                         },
