@@ -1,7 +1,5 @@
 pub use crate::steal;
 
-use num::Num;
-
 pub trait Benchable<'a, R>: Send + Sync {
     fn start(&mut self) -> Option<R>; // run the test
     fn name(&self) -> &'static str; // give it a nice name
@@ -25,7 +23,7 @@ use criterion::*;
 type Group<'a> = BenchmarkGroup<'a, criterion::measurement::WallTime>;
 pub struct Tester<'a, R>
 where
-    R: Num,
+    R: PartialEq,
 {
     result: Option<R>,
     tests: Vec<TestConfig<'a, R>>,
@@ -33,7 +31,7 @@ where
 }
 impl<'a, R> Tester<'a, R>
 where
-    R: Num + Send + std::fmt::Debug,
+    R: PartialEq + Send + std::fmt::Debug,
 {
     pub fn new(tests: Vec<TestConfig<'a, R>>, group: Group<'a>, result: Option<R>) -> Self {
         Tester {
@@ -72,7 +70,7 @@ where
 
 pub struct TestConfig<'a, R>
 where
-    R: Num,
+    R: PartialEq ,
 {
     pub len: usize,
     pub num_cpus: usize,
@@ -81,7 +79,7 @@ where
 }
 impl<'a, R> TestConfig<'a, R>
 where
-    R: Num,
+    R: PartialEq,
 {
     pub fn new(
         len: usize,
