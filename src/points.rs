@@ -50,7 +50,7 @@ impl<'a> Benchable<'a, f64> for Searcher<'a> {
         Some(self.min)
     }
     fn name(&self) -> &'static str {
-        "Adaptive Nearest Points Search"
+        "Adaptive"
     }
 }
 
@@ -178,7 +178,7 @@ impl<'a> Benchable<'a, f64> for RayonPoints<'a> {
         Some(iter.iter().fold(1.0f64, |x, y| x.min(*y)))
     }
     fn name(&self) -> &'static str {
-        "Nearest Points Rayon"
+        "Rayon"
     }
 }
 
@@ -207,6 +207,6 @@ impl<'a> Benchable<'a, f64> for FlatMapPoints<'a> {
         Some(iter)
     }
     fn name(&self) -> &'static str {
-        "FlatMap with Rayon"
+        "FlatMap"
     }
 }
