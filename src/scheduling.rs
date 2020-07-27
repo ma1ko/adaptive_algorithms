@@ -181,7 +181,7 @@ impl<'a> Benchable<'a, u64> for Scheduling {
         Some(self.best)
     }
     fn name(&self) -> &'static str {
-        "Adaptive_Scheduling"
+        "Adaptive"
     }
 }
 
@@ -205,7 +205,7 @@ impl BruteForce {
 }
 impl<'a> Benchable<'a, u64> for BruteForce {
     fn name(&self) -> &'static str {
-        "Brute Force Single"
+        "BruteForce-Sequential"
     }
     fn start(&mut self) -> Option<u64> {
         Some(brute_force(&self.times, self.procs.clone()))
@@ -213,7 +213,7 @@ impl<'a> Benchable<'a, u64> for BruteForce {
 }
 impl<'a> Benchable<'a, u64> for BruteForcePar {
     fn name(&self) -> &'static str {
-        "Brute Force Parallel"
+        "BruteForce"
     }
     fn start(&mut self) -> Option<u64> {
         Some(brute_force_par(&self.times, self.procs.clone()))
