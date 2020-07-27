@@ -70,7 +70,7 @@ where
 
 pub struct TestConfig<'a, R>
 where
-    R: PartialEq ,
+    R: PartialEq,
 {
     pub len: usize,
     pub num_cpus: usize,
@@ -100,13 +100,14 @@ where
     pub fn name(&self) -> String {
         let backoff = if let Some(backoff) = self.backoff {
             if backoff == 0 {
-                "optimized".to_string() + "/"
+                "".to_string()
+            // "optimized".to_string() + "/"
             } else {
-                backoff.to_string() + "/"
+                "/".to_string() + &backoff.to_string()
             }
         } else {
             "".to_string()
         };
-        self.test.name().to_string() + "/" + &backoff + &self.len.to_string()
+        self.test.name().to_string() + &backoff //+ "_" + &self.len.to_string()
     }
 }
