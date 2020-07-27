@@ -181,3 +181,32 @@ impl<'a> Benchable<'a, f64> for RayonPoints<'a> {
         "Nearest Points Rayon"
     }
 }
+
+pub struct FlatMapPoints<'a> {
+    points: &'a [Point],
+}
+impl<'a> FlatMapPoints<'a> {
+    pub fn new(points: &'a [Point]) -> Self {
+        FlatMapPoints { points }
+    }
+}
+impl<'a> Benchable<'a, f64> for FlatMapPoints<'a> {
+    fn start(&mut self) -> Option<f64> {
+        let points = self.points.clone();
+        let iter = points
+            .par_iter()
+            .enumerate()
+            .flat_map(|(i, a)| {
+                let inner_iter = self.points[i + 1..]
+                    .par_iter()
+                    .map(move |b| a.distance_to(b));
+                // inner_iter.fold(1.0f64, |x, y| x.min(y))
+                inner_iter
+            })
+            .reduce(|| 1.0f64, |x, y| x.min(y));
+        Some(iter)
+    }
+    fn name(&self) -> &'static str {
+        "FlatMap with Rayon"
+    }
+}

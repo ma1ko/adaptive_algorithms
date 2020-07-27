@@ -26,6 +26,8 @@ fn bench(c: &mut Criterion) {
         }
         let t = TestConfig::new(data.len(), *i, None, RayonPoints::new(&data));
         test.push(t);
+        let t = TestConfig::new(data.len(), *i, None, FlatMapPoints::new(&data));
+        test.push(t);
     }
     let mut r = RayonPoints::new(&data);
     let mut t = Tester::new(test, group, r.start());
