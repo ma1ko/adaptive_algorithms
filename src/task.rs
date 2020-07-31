@@ -63,10 +63,8 @@ pub trait Task: Sized + Send {
             || right.run(),
         );
         left.fuse(&mut right);
-        if !tasks.is_empty() {
-            tasks.push(left);
-            T::runner(tasks);
-        }
+        tasks.push(left);
+        T::runner(tasks);
     }
     fn run(&mut self) {
         let work = self.work();

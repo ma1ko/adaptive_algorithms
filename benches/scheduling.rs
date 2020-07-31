@@ -16,19 +16,19 @@ fn bench(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let n = 22;
+    let n = 14;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(n)
         .collect();
     // two process scheduling
-    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
+    let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
     let mut test: Vec<TestConfig<u64>> = vec![];
     // Baseline (single-core)
-    let bf = BruteForce::new(times.clone(), procs.clone());
-    let t = TestConfig::new(times.len(), 1, None, bf);
-    test.push(t);
+    // let bf = BruteForce::new(times.clone(), procs.clone());
+    // let t = TestConfig::new(times.len(), 1, None, bf);
+    // test.push(t);
     for i in &cpus {
-        for s in vec![0, 6, 8] {
+        for s in vec![0] {
             let t = TestConfig::new(times.len(), *i, Some(s), Scheduling::new(&times, &procs));
             test.push(t);
         }

@@ -1,6 +1,6 @@
 pub use crate::steal;
 
-pub trait Benchable<'a, R>: Send + Sync {
+pub trait Benchable<'a, R>: Send{
     fn start(&mut self) -> Option<R>; // run the test
     fn name(&self) -> &'static str; // give it a nice name
                                     // fn id(&self) -> BenchmarkId; // not required, we create one directly

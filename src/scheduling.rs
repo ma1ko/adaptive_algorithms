@@ -12,80 +12,48 @@ use rayon::prelude::*;
 use std::ops::Range;
 // use crate::task::NOTHING;
 
+use smallvec::SmallVec;
 #[derive(Debug, Clone)]
-pub struct Scheduling {
-    pub times: Vec<u64>,
-    // pub index: usize,
+pub struct Scheduling<'a> {
+    pub times: &'a [u64],
     pub best: u64,
     pub procs: Vec<u64>,
-    // pub decisions: Vec<Range<usize>>,
+    pub counter: usize,
+    pub sum: u64,
+    pub pred: Option<&'a mut Scheduling<'a>>,
 }
-impl Scheduling {
-    pub fn new(times: &Vec<u64>, procs: &Vec<u64>) -> Self {
+impl<'a> Scheduling<'a> {
+    pub fn new(times: &'a Vec<u64>, procs: &Vec<u64>) -> Self {
         // procs[0] += remaining_times[0];
-        let mut s = Scheduling {
-            times: times.clone(),
+        let sum = times.iter().sum();
+        let s = Scheduling {
+            sum, // debugging
+            times: &times,
             best: std::u64::MAX,
+            // procs: SmallVec::from_vec(*procs),
             procs: procs.clone(),
-            // decisions: Vec::new(),
+            counter: 0,
+            pred: None,
         };
-        // Do the first step, else isFinished reports it's finished without doing anything :O
-        // s.decisions.push(Range {
-        //     start: 0,
-        //     end: procs.len(),
-        // });
-        // s.procs[0] += s.remaining_times[0];
+
         s
     }
-    // fn _debug(&mut self) {
-    //     println!("-----------");
-    //     println!("Times     : {:?}", self.remaining_times);
-    //     println!("Decisions : {:?}", self.decisions);
-    //     println!("Procs     : {:?}", self.procs);
-    // }
-    // pub fn redo_tree(&mut self) {
-    //     self.procs.iter_mut().for_each(|p| *p = 0);
-    //     // TODO: this has borrowing issues, so we just do the regular loop for now
-    //     // self.decisions .iter()
-    //     //     .zip(&self.remaining_times)
-    //     //     .for_each(|(d, t)| self.procs[d.start] += t);
-    //     for i in 0..self.decisions.len() {
-    //         self.procs[self.decisions[i].start] += self.remaining_times[i];
-    //     }
-    // }
-    // fn next(&mut self) {
-    //     // self.print();
-    //     if let Some(mut d) = self.decisions.pop() {
-    //         self.procs[d.start] -= self.remaining_times[self.decisions.len()];
-    //         if d.start == d.end - 1 {
-    //             self.next();
-    //         } else {
-    //             d.start += 1;
-    //             self.procs[d.start] += self.remaining_times[self.decisions.len()];
-    //             self.decisions.push(d);
-    //         }
-    //     }
-    // }
-    fn split_range(range: &mut Range<usize>) -> Range<usize> {
-        assert!(range.start < range.end - 1); // needs to be splittable
-
-        let mid = (range.end + range.start) / 2;
-        let other = Range {
-            start: mid,
-            end: range.end,
-        };
-        range.end = mid;
-        other
+    fn verify(&self) {
+        assert_eq!(
+            self.sum,
+            self.times.iter().sum::<u64>() + self.procs.iter().sum::<u64>()
+        );
     }
 }
-impl Task for Scheduling {
+impl<'a> Task for Scheduling<'a> {
     fn step(&mut self) {
         // println!("Level: {}", self.times.len());
         // println!("{:?}", self);
+        self.verify();
         // self.print();
         // println!("Depth: {}, decisions: {:?}", self.index, self.decisions);
         // Sequential cut-off
-        if self.times.len() <= 8 {
+        if self.times.len() <= 5 {
             // subgraph("Cut-off", 1, || {
             // println!("Before {:?}", self);
             self.best = self
@@ -94,83 +62,70 @@ impl Task for Scheduling {
             // println!("After {:?}", self);
             return;
         }
-        let time = self.times.pop().unwrap();
+        let (time, rest) = self.times.split_first().unwrap();
+        // let before = std::mem::replace(&mut self.times, rest);
 
         // self.next();
 
-        for i in 0..self.procs.len() {
+        for i in self.counter..self.procs.len() {
+            self.counter += 1;
             let mut scheduling = self.clone();
+            scheduling.times = rest;
             scheduling.best = std::u64::MAX;
             scheduling.procs[i] += time;
+            scheduling.counter = 0;
+            scheduling.pred = Some(self);
+
+            // scheduling.run_with(self);
             scheduling.run();
-            // let r = brute_force_rec(procs, remaining_times);
 
             scheduling.procs[i] -= time;
-            // println!("Return");
             self.best = self.best.min(scheduling.best);
         }
-        self.times.push(time);
-
-        // self.decisions.push(Range {
-        //     start: 0,
-        //     end: self.procs.len(),
-        // });
-        // self.procs[0] += self.remaining_times[self.decisions.len() - 1];
+        self.counter = 0;
+        // let _ = std::mem::replace(&mut self.times, before);
     }
     fn can_split(&self) -> bool {
-        // We need a tree that has a choice left (meaning 2 branches, one that is currently
-        // executing and one we can steal
-        // self.decisions.iter().any(|r| r.end - r.start >= 2)
-        self.times.len() > 8
+        self.times.len() > 5
     }
 
     fn split(&mut self, mut runner: impl FnMut(&mut Vec<&mut Self>), _steal_counter: usize) {
         let mut splits = Vec::new();
-        let time = self.times.pop().unwrap();
-        for i in 1..self.procs.len() {
+        let (time, rest) = self.times.split_first().unwrap();
+        // let before = std::mem::replace(&mut self.times, rest);
+
+        for i in self.counter..self.procs.len() {
+            self.counter += 1;
             let mut scheduling = self.clone();
+            scheduling.times = rest;
             scheduling.best = std::u64::MAX;
             scheduling.procs[i] += time;
+            scheduling.counter = 0;
             splits.push(scheduling);
         }
-        self.times[0] += time;
+        // self.procs[0] += time;
         let mut splits = splits.iter_mut().collect::<Vec<&mut Self>>();
-        splits.insert(0, self);
-        runner(&mut splits);
-        self.times[0] -= time;
-        self.times.push(time);
+        // splits.insert(0, self);
+        if splits.is_empty() {
+            println!("Anc splitting");
+            if let Some(mut pred) = self.pred {
+                println!("Anc splitting");
+                pred.split(runner, 1);
+            }
+            return;
+        };
+        if splits.len() == 1 {
+            println!("Splitting: Sub");
+            splits[0].split(runner, 1);
+        } else {
+            println!("Splitting: {}", splits.len());
+            runner(&mut splits);
+        }
+        // self.procs[0] -= time;
+        // let _ = std::mem::replace(&mut self.times, before);
+        self.fuse(&mut splits[0]);
     }
 
-    // let mut split = 0;
-    // for i in 0..self.decisions.len() {
-    //     if self.decisions[i].end - self.decisions[i].start >= 2 {
-    //         let mut other = Scheduling {
-    //             remaining_times: self.remaining_times.clone(),
-    //             best: self.best,
-    //             procs: self.procs.clone(),
-    //             decisions: self.decisions.clone(),
-    //         };
-
-    //         let other_range = Scheduling::split_range(&mut self.decisions[i]);
-    //         // self.decisions[i] = my_range;
-    //         other.decisions[i] = other_range;
-    //         other.decisions.truncate(i + 1);
-    //         other.redo_tree();
-    //         splits.push(other);
-    //         split += 1;
-    //         if split == steal_counter {
-    //             break;
-    //         }
-    //     }
-    // }
-    // if split == 0 {
-    //     // This might be possible, but I haven't seen it in a bit
-    //     assert!(false, "Couldn't split");
-    //     return;
-    // }
-    // let mut splits = splits.iter_mut().collect::<Vec<&mut Self>>();
-    // splits.insert(0, self);
-    // runner(&mut splits);
     fn fuse(&mut self, other: &mut Self) {
         self.best = other.best.min(self.best);
     }
@@ -187,9 +142,9 @@ impl Task for Scheduling {
 fn test_scheduling() {
     use crate::rayon::get_thread_pool;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
-        .take(22)
+        .take(16)
         .collect();
-    let procs: Vec<u64> = std::iter::repeat(0).take(2).collect();
+    let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
 
     let mut s = Scheduling::new(&times, &procs);
     // let my_result = s.start();
@@ -203,10 +158,11 @@ fn test_scheduling() {
 }
 
 use crate::adaptive_bench::Benchable;
-impl<'a> Benchable<'a, u64> for Scheduling {
+impl<'a> Benchable<'a, u64> for Scheduling<'a> {
     fn start(&mut self) -> Option<u64> {
-        self.procs.iter_mut().for_each(|p| *p = 0);
-        *self = Self::new(&self.times, &self.procs);
+        // self.procs.iter_mut().for_each(|p| *p = 0);
+        self.best = std::u64::MAX;
+        // *self = Self::new(&self.times, &self.procs);
         self.run();
         Some(self.best)
     }
