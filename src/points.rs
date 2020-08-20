@@ -95,7 +95,7 @@ impl<'a> Task for Searcher<'a> {
         }
         let mut tasks = tasks.iter_mut().collect::<Vec<&mut Self>>();
         tasks.insert(0, self);
-        println!("{:?}", tasks.iter().map(|x| (x.start_index, x.end_index)).collect::<Vec<_>>());
+       // println!("{:?}", tasks.iter().map(|x| (x.start_index, x.end_index)).collect::<Vec<_>>());
         runner(&mut tasks);
     }
 
