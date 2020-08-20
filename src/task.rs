@@ -64,8 +64,8 @@ pub trait Task: Sized + Send {
         );
         left.fuse(&mut right);
         if !tasks.is_empty() {
-            tasks.push(left);
             T::runner(tasks);
+            left.fuse(tasks.pop().unwrap());
         }
     }
     fn run(&mut self) {
