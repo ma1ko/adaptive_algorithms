@@ -76,14 +76,17 @@ impl<'a> Task for Searcher<'a> {
         let mut start_index = self.start_index;
         let end_index = self.end_index;
         // how many elements per task? We need at least one
-        let step = (end_index - start_index) / (steal_counter + 1) + 1;
+        let mut step = (end_index - start_index) / (steal_counter + 1) + 1;
+        if end_index - start_index <= 2 {
+            step = 1;
+        }
         let mut tasks = vec![];
         self.end_index = start_index + step;
         start_index += step;
         while start_index < end_index {
             let other: Searcher<'a> = Searcher {
                 points: self.points,
-                start_index,
+                start_index: start_index.min(end_index),
                 end_index: (start_index + step).min(end_index),
                 min: self.min,
             };
@@ -92,6 +95,7 @@ impl<'a> Task for Searcher<'a> {
         }
         let mut tasks = tasks.iter_mut().collect::<Vec<&mut Self>>();
         tasks.insert(0, self);
+        println!("{:?}", tasks.iter().map(|x| (x.start_index, x.end_index)).collect::<Vec<_>>());
         runner(&mut tasks);
     }
 
