@@ -119,6 +119,7 @@ struct Tester<'a> {
 }
 
 impl<'a> Task for Tester<'a> {
+
     fn step(&mut self) {
         let mut min = self.min;
         let point = self.point;

@@ -3,8 +3,8 @@ use adaptive_algorithms::rayon::*;
 
 fn main() {
     let points = Point::create_random_points(10000);
-    // let pool = get_custom_thread_pool(3,6);
-    let pool = get_thread_pool();
+    let pool = get_custom_thread_pool(4,8);
+    // let pool = get_thread_pool();
 
 
     for _ in 0..100 {
@@ -19,7 +19,7 @@ fn main() {
         {
             pool.install(|| s.run());
         }
-        // #[cfg(feature = "statistics")]
-        // adaptive_algorithms::task::print_statistics();
+        #[cfg(feature = "statistics")]
+        adaptive_algorithms::task::print_statistics();
     }
 }

@@ -7,6 +7,19 @@ use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 lazy_static! {
     pub static ref SUCCESSFUL_STEALS: AtomicUsize = AtomicUsize::new(0);
     pub static ref TOTAL_STEAL_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    pub static ref STEPS: AtomicUsize = AtomicUsize::new(0);
+    pub static ref STEP_TIME: AtomicUsize = AtomicUsize::new(0);
+
+}
+#[cfg(feature = "statistics")]
+pub fn reset_statistics(){
+    SUCCESSFUL_STEALS.store(0, Relaxed);
+    TOTAL_STEAL_COUNTER.store(0, Relaxed);
+    steal::STEAL_SUCCESS.store(0, Relaxed);
+    steal::STEAL_FAIL.store(0, Relaxed);
+    STEPS.store(0, Relaxed);
+    STEP_TIME.store(0, Relaxed);
+
 }
 
 #[cfg(feature = "statistics")]
@@ -15,11 +28,17 @@ pub fn print_statistics() {
     let total = TOTAL_STEAL_COUNTER.load(Relaxed);
     let successes = steal::STEAL_SUCCESS.load(Relaxed);
     let fails = steal::STEAL_FAIL.load(Relaxed);
+    let steps = STEPS.load(Relaxed);
+    let step_time = STEP_TIME.load(Relaxed);
     println!("Sum of steals: {}", steals);
     println!("Steal Counter: {}", total);
     println!("Average Steal Counter: {}", total as f64 / steals as f64);
     println!("Successful steals: {}", successes);
     println!("Failed steals: {}", fails);
+    println!("Steps: {}", steps);
+    println!("Times: {}", step_time);
+    println!("Avg step time: {} nanos", step_time as f64 /steps as f64);
+
 }
 
 pub trait Task: Sized + Send {
@@ -77,7 +96,7 @@ pub trait Task: Sized + Send {
                     self.split_run(steal_counter);
                     continue;
                 }
-                self.step();
+                self.do_step();
             }
         };
         if let Some((work_type, work_amount)) = work {
@@ -95,7 +114,7 @@ pub trait Task: Sized + Send {
                     self.split_run_with(steal_counter, f);
                     continue;
                 }
-                self.step();
+                self.do_step();
             }
         };
         if let Some((work_type, work_amount)) = work {
@@ -104,6 +123,19 @@ pub trait Task: Sized + Send {
             run_loop()
         }
     }
+    #[cfg(not(feature = "statistics"))]
+    fn do_step(&mut self) {
+
+    }
+    #[cfg(feature = "statistics")]
+    fn do_step(&mut self){
+        let start = std::time::Instant::now();
+        self.step();
+        STEP_TIME.fetch_add(start.elapsed().as_nanos() as usize, Relaxed);
+        STEPS.fetch_add(1, Relaxed);
+
+    }
+
     fn step(&mut self);
     fn split_run_with(&mut self, steal_counter: usize, f: &mut impl Task) {
         if f.can_split() {

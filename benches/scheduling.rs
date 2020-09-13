@@ -16,7 +16,7 @@ fn bench(c: &mut Criterion) {
         .cloned()
         .collect();
 
-    let n = 22;
+    let n = 24;
     let times: Vec<u64> = std::iter::repeat_with(|| rand::random::<u64>() % 10_000)
         .take(n)
         .collect();
@@ -28,8 +28,8 @@ fn bench(c: &mut Criterion) {
     let t = TestConfig::new(times.len(), 1, None, bf);
     test.push(t);
     for i in &cpus {
-        for s in vec![0, 6, 8] {
-            let t = TestConfig::new(times.len(), *i, Some(s), Scheduling::new(&times, &procs));
+        for s in vec![2,4,6,8,10,12,14, 16] {
+            let t = TestConfig::new(times.len(), *i, Some(s), Scheduling::new(&times, &procs, s));
             test.push(t);
         }
         let t = TestConfig::new(

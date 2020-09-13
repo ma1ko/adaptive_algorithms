@@ -19,15 +19,17 @@ pub struct Scheduling {
     pub best: u64,
     pub procs: Vec<u64>,
     pub decisions: Vec<Range<usize>>,
+    pub min_depth: usize
 }
 impl Scheduling {
-    pub fn new(remaining_times: &Vec<u64>, procs: &Vec<u64>) -> Self {
+    pub fn new(remaining_times: &Vec<u64>, procs: &Vec<u64>,min_depth: usize) -> Self {
         // procs[0] += remaining_times[0];
         let mut s = Scheduling {
             remaining_times: remaining_times.clone(),
             best: std::u64::MAX,
             procs: procs.clone(),
             decisions: Vec::new(),
+            min_depth
         };
         // Do the first step, else isFinished reports it's finished without doing anything :O
         s.decisions.push(Range {
@@ -83,7 +85,7 @@ impl Task for Scheduling {
         // self.print();
         // println!("Depth: {}, decisions: {:?}", self.index, self.decisions);
         // Sequential cut-off
-        if self.remaining_times.len() - self.decisions.len() <= 5 {
+        if self.remaining_times.len() - self.decisions.len() <= self.min_depth {
             // subgraph("Cut-off", 1, || {
             self.best = self.best.min(brute_force_rec(
                 &mut self.procs,
@@ -115,6 +117,7 @@ impl Task for Scheduling {
                     best: self.best,
                     procs: self.procs.clone(),
                     decisions: self.decisions.clone(),
+                    min_depth : self.min_depth
                 };
 
                 let other_range = Scheduling::split_range(&mut self.decisions[i]);
@@ -160,10 +163,10 @@ fn test_scheduling() {
         .collect();
     let procs: Vec<u64> = std::iter::repeat(0).take(3).collect();
 
-    let mut s = Scheduling::new(&times, &procs);
+    let mut s = Scheduling::new(&times, &procs, 5);
     let my_result = s.start();
     let pool = get_thread_pool();
-    let mut s = Scheduling::new(&times, &procs);
+    let mut s = Scheduling::new(&times, &procs, 5);
     pool.install(|| s.start());
     // s.start();
     let mut b = BruteForcePar::new(times.clone(), procs.clone());
@@ -176,7 +179,7 @@ use crate::adaptive_bench::Benchable;
 impl<'a> Benchable<'a, u64> for Scheduling {
     fn start(&mut self) -> Option<u64> {
         self.procs.iter_mut().for_each(|p| *p = 0);
-        *self = Self::new(&self.remaining_times, &self.procs);
+        *self = Self::new(&self.remaining_times, &self.procs, self.min_depth);
         self.run();
         Some(self.best)
     }

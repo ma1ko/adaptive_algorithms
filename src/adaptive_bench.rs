@@ -7,11 +7,11 @@ pub trait Benchable<'a, R>: Send + Sync {
     fn get_thread_pool(&self, num_threads: usize, backoffs: Option<usize>) -> rayon::ThreadPool {
         let mut pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads);
         if let Some(backoffs) = backoffs {
-            if backoffs == 0 {
+            // if backoffs == 0 {
                 pool = pool.steal_callback(move |x| steal::optimized_steal(x))
-            } else {
-                pool = pool.steal_callback(move |x| steal::steal(backoffs, x));
-            }
+            // } else {
+                // pool = pool.steal_callback(move |x| steal::steal(backoffs, x));
+            // }
         }
         pool.build().unwrap()
     }
@@ -42,6 +42,10 @@ where
     }
     pub fn run(&mut self) {
         for test in &mut self.tests {
+            #[cfg(feature = "statistics")] {
+            use crate::task::{reset_statistics};
+            reset_statistics();
+            }
             let group = &mut self.group;
             // let checksum = self.checksum;
             group.bench_with_input(
@@ -64,6 +68,10 @@ where
                     );
                 },
             );
+           #[cfg(feature = "statistics")] {
+            use crate::task::{print_statistics};
+            print_statistics();
+            }
         }
     }
 }
